@@ -2,7 +2,7 @@
 
 Personal data exchange. A capture is refined, privacy-filtered, and packaged. The owner keeps it in the silo or lists it. Buyers pay in Harvest Credits. Contributors receive 85 percent. The platform keeps 15. Restricted places never become packets.
 
-A kept or listed packet can emit a `fault` signal for :\\ARCHITECT\\. The signal is a service request. Architect still stops before any irreversible step.
+A kept or listed packet can emit a `fault` signal for :\ARCHITECT\. The signal is a service request. Architect still stops before any irreversible step. The standalone bridge is `examples/architect-signal.ts`, which posts to `POST /v1/signals/hrvst` on the Architect server.
 
 ## API
 
