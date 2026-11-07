@@ -1,0 +1,17 @@
+{
+  "name": "@infinitum/hrvst",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "[HRVST] personal data exchange: capture, privacy filter, silo, missions, licenses, Architect signals.",
+  "engines": { "node": ">=22.18" },
+  "scripts": {
+    "start": "node --experimental-strip-types src/server.ts",
+    "test": "node --experimental-strip-types --test test/domain.test.ts",
+    "typecheck": "tsc -p . --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.0"
+  }
+}
