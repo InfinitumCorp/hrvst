@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { timingSafeEqual } from "node:crypto";
 import { getBackend, HrvstError, type PlaceClass } from "./domain.ts";
+import { firmSuite } from "./firm.ts";
 
 const PLACES = new Set<PlaceClass>([
   "street",
@@ -58,6 +59,12 @@ export function createHrvstServer(token = process.env.HRVST_API_TOKEN): ReturnTy
       const [, resource, id, action] = parts;
 
       if (resource === "board" && req.method === "GET") return json(res, 200, store.snapshot());
+
+      // FIRM Suite: FIRM, FIRM Wallet, Firmament Network and $HRVST; with ?owner=, that CID's credits.
+      if (resource === "firm" && req.method === "GET" && !id) {
+        const owner = url.searchParams.get("owner") ?? undefined;
+        return json(res, 200, firmSuite(owner, owner ? store.balance(owner) : undefined));
+      }
 
       if (resource === "captures" && req.method === "POST" && !id) {
         const body = await readBody(req);
