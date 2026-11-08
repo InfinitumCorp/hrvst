@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { timingSafeEqual } from "node:crypto";
 import { getBackend, HrvstError, type PlaceClass } from "./domain.ts";
 import { firmSuite } from "./firm.ts";
+import { conjureRoutesFromEnv, toWebRequest, sendWebResponse } from "./conjure/conjure.mjs";
 
 const PLACES = new Set<PlaceClass>([
   "street",
@@ -49,6 +50,8 @@ function place(value: unknown): PlaceClass {
 
 export function createHrvstServer(token = process.env.HRVST_API_TOKEN): ReturnType<typeof createServer> {
   const store = getBackend();
+  // @conjure: POST /v1/conjure { text, context?, source? } and GET /v1/conjure/<ticket>, as ?owner=<CID>.
+  const conjure = conjureRoutesFromEnv(process.env, { prefix: "/v1/conjure", source: "hrvst" });
   return createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     const parts = url.pathname.split("/").filter(Boolean);
@@ -57,6 +60,12 @@ export function createHrvstServer(token = process.env.HRVST_API_TOKEN): ReturnTy
       if (parts[0] !== "v1") throw new HrvstError("not found", 404);
       if (!authorized(req, token)) throw new HrvstError("missing or invalid bearer token", 401);
       const [, resource, id, action] = parts;
+
+      if (resource === "conjure") {
+        const owner = url.searchParams.get("owner") ?? "";
+        const handled = await conjure(await toWebRequest(req), { user: owner || null });
+        if (handled) return void (await sendWebResponse(res, handled));
+      }
 
       if (resource === "board" && req.method === "GET") return json(res, 200, store.snapshot());
 
