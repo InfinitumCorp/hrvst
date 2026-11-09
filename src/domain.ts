@@ -279,17 +279,26 @@ export class HrvstBackend {
   }
 
   /** Observe → Understand → Act. A kept or listed fault becomes an Architect score, still unapproved. */
-  signalArchitect(packetId: string): ArchitectSignal {
+  signalArchitect(packetId: string, routingNote?: string): ArchitectSignal {
     const packet = this.requirePacket(packetId);
     if (packet.status !== "private" && packet.status !== "listed") {
       throw new HrvstError("only an approved packet can start work");
+    }
+    let goal = `Field observation ${packet.id} at ${packet.placeLabel}: ${packet.observation}. Prepare a service request and stop for approval before any irreversible step.`;
+    if (
+      routingNote &&
+      routingNote.length <= 240 &&
+      /^[A-Za-z0-9._:!+,\- ;]+$/.test(routingNote) &&
+      /[A-Za-z0-9]/.test(routingNote)
+    ) {
+      goal += ` Geo routing: ${routingNote}.`;
     }
     const signal: ArchitectSignal = {
       id: nid("sig"),
       product: "hrvst",
       type: "fault",
       packetId: packet.id,
-      goal: `Field observation ${packet.id} at ${packet.placeLabel}: ${packet.observation}. Prepare a service request and stop for approval before any irreversible step.`,
+      goal,
       createdAt: iso(),
       delivered: false,
     };

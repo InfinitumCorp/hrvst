@@ -2,6 +2,8 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { timingSafeEqual } from "node:crypto";
 import { getBackend, HrvstError, type PlaceClass } from "./domain.ts";
 import { firmSuite } from "./firm.ts";
+import { clientAddress, formatGeoLog, geoRoutingNote, headerHost, openGeoHook, type GeoHook } from "./geo-hook.ts";
+import { applyGeoRoutingFlag, formatGeoSwitch, loadSettings, saveSettings, settingsPath } from "./settings.ts";
 import { conjureRoutesFromEnv, toWebRequest, sendWebResponse } from "./conjure/conjure.mjs";
 
 const PLACES = new Set<PlaceClass>([
@@ -48,14 +50,42 @@ function place(value: unknown): PlaceClass {
   return value as PlaceClass;
 }
 
-export function createHrvstServer(token = process.env.HRVST_API_TOKEN): ReturnType<typeof createServer> {
+export interface HrvstServerOptions {
+  /** When set, used instead of the process switch and the saved preference. */
+  geo?: GeoHook | null;
+  /** Environment for the geo switch when `geo` is omitted. Defaults to process.env. */
+  env?: NodeJS.ProcessEnv;
+  /** Receives one geo log line per request while the hook is open. */
+  geoLog?: (line: string) => void;
+}
+
+export function createHrvstServer(
+  token = process.env.HRVST_API_TOKEN,
+  options?: HrvstServerOptions,
+): ReturnType<typeof createServer> {
   const store = getBackend();
+  const geo = options?.geo !== undefined ? options.geo : openGeoHook(options?.env ?? process.env);
+  const geoLog = options?.geoLog ?? ((line: string) => console.log(line));
   // @conjure: POST /v1/conjure { text, context?, source? } and GET /v1/conjure/<ticket>, as ?owner=<CID>.
   const conjure = conjureRoutesFromEnv(process.env, { prefix: "/v1/conjure", source: "hrvst" });
   return createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     const parts = url.pathname.split("/").filter(Boolean);
     try {
+      let routingNote: string | undefined;
+      if (geo) {
+        try {
+          const annotation = geo.annotate(clientAddress(req), headerHost(req));
+          geoLog(formatGeoLog(req.method ?? "GET", url.pathname, annotation));
+          const note = geoRoutingNote(annotation);
+          if (note) {
+            routingNote = note;
+            res.setHeader("x-hrvst-geo", note);
+          }
+        } catch (error) {
+          console.error(`geo lookup failed: ${error instanceof Error ? error.message : "failed"}`);
+        }
+      }
       if (url.pathname === "/healthz") return json(res, 200, { ok: true, product: "hrvst" });
       if (parts[0] !== "v1") throw new HrvstError("not found", 404);
       if (!authorized(req, token)) throw new HrvstError("missing or invalid bearer token", 401);
@@ -107,7 +137,7 @@ export function createHrvstServer(token = process.env.HRVST_API_TOKEN): ReturnTy
       }
 
       if (resource === "packets" && id && action === "signal" && req.method === "POST") {
-        return json(res, 202, store.signalArchitect(id));
+        return json(res, 202, store.signalArchitect(id, routingNote));
       }
 
       if (resource === "missions" && req.method === "POST" && !id) {
@@ -138,8 +168,24 @@ export function createHrvstServer(token = process.env.HRVST_API_TOKEN): ReturnTy
 
 const self = process.argv[1] ?? "";
 if (self.endsWith("server.ts") || self.endsWith("server.js")) {
+  const file = settingsPath();
+  const settings = loadSettings(file);
+  let saved = false;
+  try {
+    saved = applyGeoRoutingFlag(process.argv.slice(2), settings);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : "invalid geo-routing flag");
+    process.exit(1);
+  }
+  if (saved) saveSettings(settings, file);
+  console.log(formatGeoSwitch(settings, process.env, saved));
   const port = Number(process.env.PORT ?? 7340);
-  createHrvstServer().listen(port, "0.0.0.0", () => {
-    console.log(`HRVST listening on ${port}`);
-  });
+  try {
+    createHrvstServer().listen(port, "0.0.0.0", () => {
+      console.log(`HRVST listening on ${port}`);
+    });
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : "failed");
+    process.exit(1);
+  }
 }
