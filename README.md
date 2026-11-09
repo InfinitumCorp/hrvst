@@ -27,6 +27,21 @@ npm test
 HRVST_API_TOKEN=change-me npm start
 ```
 
+## Geo routing
+
+Geo routing is off unless the saved preference and `INFINITUM_GEO_ENABLED` are both on. Captures, the privacy filter, licenses, and missions are unchanged while it is off.
+
+HRVST has no settings screen. The preference is `.hrvst/settings.json` (`geoRouting`, default off):
+
+```bash
+node --experimental-strip-types src/settings.ts
+node --experimental-strip-types src/settings.ts --geo-routing on
+node --experimental-strip-types src/settings.ts --no-geo-routing
+npm start -- --geo-routing off
+```
+
+With both switches on, HRVST reads `data/geoip.dat` and `data/geosite.dat`, logs the client country and the request host's site categories, and adds that note to an Architect fault. `npm run geo:fetch` downloads the pinned v2fly releases, checks them against `geo.lock.json` and the official `.sha256sum` assets, and stops on a mismatch. The `.dat` files are not committed. See `THIRD_PARTY_NOTICES`.
+
 Proof of perspective is a SHA-256 chain over owner, capture time, raw digest, and the filtered observation. Raw media is not stored.
 
 This is the civilian product. It does not sell observations from restricted places, and it does not task military systems.
