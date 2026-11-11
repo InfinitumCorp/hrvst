@@ -3,6 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { getBackend, HrvstError, type PlaceClass } from "./domain.ts";
 import { firmSuite } from "./firm.ts";
 import { conjureRoutesFromEnv, toWebRequest, sendWebResponse } from "./conjure/conjure.mjs";
+import { createCidVerifier, type CidProfile } from "./cid.ts";
 
 const PLACES = new Set<PlaceClass>([
   "street",
@@ -35,12 +36,24 @@ async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> 
   return parsed as Record<string, unknown>;
 }
 
-function authorized(req: IncomingMessage, token: string | undefined): boolean {
-  if (!token) return true;
+/** Services send HRVST_API_TOKEN; people send their Cumulus ID token and act only as themselves. */
+type Caller = { kind: "service" } | { kind: "person"; profile: CidProfile };
+
+async function caller(req: IncomingMessage, token: string | undefined, verifyCid: (t: string) => Promise<CidProfile | null>): Promise<Caller | null> {
+  if (!token) return { kind: "service" };
   const header = req.headers.authorization?.replace(/^Bearer\s+/i, "") ?? "";
   const a = Buffer.from(header);
   const b = Buffer.from(token);
-  return a.length === b.length && timingSafeEqual(a, b);
+  if (a.length === b.length && timingSafeEqual(a, b)) return { kind: "service" };
+  const profile = header ? await verifyCid(header) : null;
+  return profile ? { kind: "person", profile } : null;
+}
+
+/** The owner a call acts for: a person is always their own CID; a service names one. */
+function ownerFor(who: Caller, asked: unknown): string {
+  if (who.kind === "service") return String(asked ?? "");
+  if (asked !== undefined && asked !== null && asked !== "" && asked !== who.profile.cid) throw new HrvstError("you can only act as your own Cumulus ID", 403);
+  return who.profile.cid;
 }
 
 function place(value: unknown): PlaceClass {
@@ -48,7 +61,10 @@ function place(value: unknown): PlaceClass {
   return value as PlaceClass;
 }
 
-export function createHrvstServer(token = process.env.HRVST_API_TOKEN): ReturnType<typeof createServer> {
+export function createHrvstServer(
+  token = process.env.HRVST_API_TOKEN,
+  verifyCid: (t: string) => Promise<CidProfile | null> = createCidVerifier(),
+): ReturnType<typeof createServer> {
   const store = getBackend();
   // @conjure: POST /v1/conjure { text, context?, source? } and GET /v1/conjure/<ticket>, as ?owner=<CID>.
   const conjure = conjureRoutesFromEnv(process.env, { prefix: "/v1/conjure", source: "hrvst" });
@@ -58,11 +74,12 @@ export function createHrvstServer(token = process.env.HRVST_API_TOKEN): ReturnTy
     try {
       if (url.pathname === "/healthz") return json(res, 200, { ok: true, product: "hrvst" });
       if (parts[0] !== "v1") throw new HrvstError("not found", 404);
-      if (!authorized(req, token)) throw new HrvstError("missing or invalid bearer token", 401);
+      const who = await caller(req, token, verifyCid);
+      if (!who) throw new HrvstError("sign in with Cumulus ID, or send the service token", 401);
       const [, resource, id, action] = parts;
 
       if (resource === "conjure") {
-        const owner = url.searchParams.get("owner") ?? "";
+        const owner = ownerFor(who, url.searchParams.get("owner") ?? "");
         const handled = await conjure(await toWebRequest(req), { user: owner || null });
         if (handled) return void (await sendWebResponse(res, handled));
       }
@@ -71,14 +88,14 @@ export function createHrvstServer(token = process.env.HRVST_API_TOKEN): ReturnTy
 
       // FIRM Suite: FIRM, FIRM Wallet, Firmament Network and $HRVST; with ?owner=, that CID's credits.
       if (resource === "firm" && req.method === "GET" && !id) {
-        const owner = url.searchParams.get("owner") ?? undefined;
+        const owner = ownerFor(who, url.searchParams.get("owner") ?? undefined) || undefined;
         return json(res, 200, firmSuite(owner, owner ? store.balance(owner) : undefined));
       }
 
       if (resource === "captures" && req.method === "POST" && !id) {
         const body = await readBody(req);
         const capture = store.capture({
-          owner: String(body.owner ?? ""),
+          owner: ownerFor(who, body.owner),
           note: String(body.note ?? ""),
           placeLabel: String(body.placeLabel ?? ""),
           placeClass: place(body.placeClass),
@@ -113,7 +130,7 @@ export function createHrvstServer(token = process.env.HRVST_API_TOKEN): ReturnTy
       if (resource === "missions" && req.method === "POST" && !id) {
         const body = await readBody(req);
         return json(res, 201, store.postMission({
-          buyer: String(body.buyer ?? ""),
+          buyer: ownerFor(who, body.buyer),
           title: String(body.title ?? ""),
           brief: String(body.brief ?? ""),
           rewardCredits: Number(body.rewardCredits),
@@ -123,7 +140,7 @@ export function createHrvstServer(token = process.env.HRVST_API_TOKEN): ReturnTy
 
       if (resource === "missions" && id && req.method === "POST") {
         const body = await readBody(req);
-        if (action === "claim") return json(res, 200, store.claimMission(id, String(body.owner ?? "")));
+        if (action === "claim") return json(res, 200, store.claimMission(id, ownerFor(who, body.owner)));
         if (action === "submit") return json(res, 200, store.submitMission(id, String(body.packetId ?? "")));
         if (action === "accept") return json(res, 200, store.acceptMission(id));
       }
