@@ -7,7 +7,7 @@
   "engines": { "node": ">=22.18" },
   "scripts": {
     "start": "node --experimental-strip-types src/server.ts",
-    "test": "node --experimental-strip-types --test test/domain.test.ts test/firm.test.ts test/conjure.test.ts test/cid.test.ts",
+    "test": "node --experimental-strip-types --test test/domain.test.ts test/firm.test.ts test/conjure.test.ts test/openclaw.test.ts test/cid.test.ts",
     "typecheck": "tsc -p . --noEmit"
   },
   "devDependencies": {
