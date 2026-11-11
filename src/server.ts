@@ -4,6 +4,7 @@ import { getBackend, HrvstError, type PlaceClass } from "./domain.ts";
 import { firmSuite } from "./firm.ts";
 import { conjureRoutesFromEnv, toWebRequest, sendWebResponse } from "./conjure/conjure.mjs";
 import { openClawRoutesFromEnv } from "./openclaw/openclaw.mjs";
+import { searchRoutesFromEnv } from "./search/search.mjs";
 import { createCidVerifier, type CidProfile } from "./cid.ts";
 
 const PLACES = new Set<PlaceClass>([
@@ -72,6 +73,9 @@ export function createHrvstServer(
   // @scalvs / @scalus: POST /v1/openclaw { text, context? } asks the SCALVS agent (OpenClaw), as ?owner=<CID>.
   // Off until OPENCLAW_GATEWAY_URL and OPENCLAW_GATEWAY_TOKEN are set.
   const openclaw = openClawRoutesFromEnv(process.env, { prefix: "/v1/openclaw", product: "hrvst" });
+  // @search: POST /v1/search { query } or { text: "@search ..." } — Infinitum Search, a web answer with
+  // numbered sources, as ?owner=<CID>. Only the typed question goes out. Off until a search engine is set.
+  const search = searchRoutesFromEnv(process.env, { prefix: "/v1/search" });
   return createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     const parts = url.pathname.split("/").filter(Boolean);
@@ -91,6 +95,12 @@ export function createHrvstServer(
       if (resource === "openclaw" && !id) {
         const owner = ownerFor(who, url.searchParams.get("owner") ?? "");
         const handled = await openclaw(await toWebRequest(req), { user: owner || null });
+        if (handled) return void (await sendWebResponse(res, handled));
+      }
+
+      if (resource === "search" && !id) {
+        const owner = ownerFor(who, url.searchParams.get("owner") ?? "");
+        const handled = await search(await toWebRequest(req), { user: owner || null });
         if (handled) return void (await sendWebResponse(res, handled));
       }
 
