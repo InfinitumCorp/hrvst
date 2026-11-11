@@ -3,6 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { getBackend, HrvstError, type PlaceClass } from "./domain.ts";
 import { firmSuite } from "./firm.ts";
 import { conjureRoutesFromEnv, toWebRequest, sendWebResponse } from "./conjure/conjure.mjs";
+import { openClawRoutesFromEnv } from "./openclaw/openclaw.mjs";
 import { createCidVerifier, type CidProfile } from "./cid.ts";
 
 const PLACES = new Set<PlaceClass>([
@@ -68,6 +69,9 @@ export function createHrvstServer(
   const store = getBackend();
   // @conjure: POST /v1/conjure { text, context?, source? } and GET /v1/conjure/<ticket>, as ?owner=<CID>.
   const conjure = conjureRoutesFromEnv(process.env, { prefix: "/v1/conjure", source: "hrvst" });
+  // @scalvs / @scalus: POST /v1/openclaw { text, context? } asks the SCALVS agent (OpenClaw), as ?owner=<CID>.
+  // Off until OPENCLAW_GATEWAY_URL and OPENCLAW_GATEWAY_TOKEN are set.
+  const openclaw = openClawRoutesFromEnv(process.env, { prefix: "/v1/openclaw", product: "hrvst" });
   return createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     const parts = url.pathname.split("/").filter(Boolean);
@@ -81,6 +85,12 @@ export function createHrvstServer(
       if (resource === "conjure") {
         const owner = ownerFor(who, url.searchParams.get("owner") ?? "");
         const handled = await conjure(await toWebRequest(req), { user: owner || null });
+        if (handled) return void (await sendWebResponse(res, handled));
+      }
+
+      if (resource === "openclaw" && !id) {
+        const owner = ownerFor(who, url.searchParams.get("owner") ?? "");
+        const handled = await openclaw(await toWebRequest(req), { user: owner || null });
         if (handled) return void (await sendWebResponse(res, handled));
       }
 
