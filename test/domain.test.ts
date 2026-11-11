@@ -24,6 +24,19 @@ test("restricted places never become packets", () => {
   assert.equal(store.packets.size, 0);
 });
 
+test("restricted places become packets when the owner opts in", () => {
+  const store = new HrvstBackend();
+  const capture = store.capture({
+    owner: "cid:field",
+    note: "Kitchen window latch is loose and the room is visible.",
+    placeLabel: "Home",
+    placeClass: "home_interior",
+  });
+  const refined = store.refine(capture.id, true);
+  assert.equal(refined.capture.status, "refined");
+  assert.equal(refined.packet?.permittedUses[0], "restricted:home_interior");
+});
+
 test("license pays the contributor 85 percent and records proof", () => {
   const store = new HrvstBackend();
   store.credit("cid:buyer", 200, "seed");

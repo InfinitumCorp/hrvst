@@ -1,6 +1,6 @@
 # [HRVST]
 
-Personal data exchange. A capture is refined, privacy-filtered, and packaged. The owner keeps it in the silo or lists it. Buyers pay in Harvest Credits. Contributors receive 85 percent. The platform keeps 15. Restricted places never become packets.
+Personal data exchange. A capture is refined, privacy-filtered, and packaged. The owner keeps it in the silo or lists it. Buyers pay in Harvest Credits. Contributors receive 85 percent. The platform keeps 15. A restricted place (`private_residence`, `school`, `hospital`, `military`, `home_interior`) stays on the device unless the owner opts in. Opt-in is `POST /v1/captures/:id/refine` with `{ "optedIn": true }`. Without that flag it is excluded. Raw contact details are still stripped.
 
 ## Anchor buyer
 
@@ -17,7 +17,7 @@ A kept or listed packet can emit a `fault` signal for :\ARCHITECT\. The signal i
 | GET | `/healthz` | liveness |
 | GET | `/v1/board` | captures, packets, missions, grants, ledger, signals |
 | POST | `/v1/captures` | `{ owner, note, placeLabel, placeClass }` |
-| POST | `/v1/captures/:id/refine` | filter, or exclude a restricted place |
+| POST | `/v1/captures/:id/refine` | filter, or exclude a restricted place unless `{ "optedIn": true }` |
 | POST | `/v1/packets/:id/decide` | `{ action: keep|list|delete, priceCredits? }` |
 | POST | `/v1/packets/:id/license` | `{ licensee }` |
 | POST | `/v1/packets/:id/signal` | queue an Architect fault |
