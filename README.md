@@ -2,6 +2,10 @@
 
 Personal data exchange. A capture is refined, privacy-filtered, and packaged. The owner keeps it in the silo or lists it. Buyers pay in Harvest Credits. Contributors receive 85 percent. The platform keeps 15. Restricted places never become packets.
 
+## Anchor buyer
+
+**Premise** ([premise.com](https://premise.com)) is the data buyer to approach. They already pay people for retail-shelf audits and public-place inspections. Status: prospective. There is no contract, no Harvest Credit balance, and no licence until a person signs one. A mission from Premise may ask only for `retail`, `street`, `public_building`, or `field`.
+
 A kept or listed packet can emit a `fault` signal for :\ARCHITECT\. The signal is a service request. Architect still stops before any irreversible step. The standalone bridge is `examples/architect-signal.ts`, which posts to `POST /v1/signals/hrvst` on the Architect server.
 
 ## API
