@@ -88,7 +88,8 @@ export function createHrvstServer(token = process.env.HRVST_API_TOKEN): ReturnTy
       }
 
       if (resource === "captures" && id && action === "refine" && req.method === "POST") {
-        return json(res, 200, store.refine(id));
+        const body = await readBody(req);
+        return json(res, 200, store.refine(id, body.optedIn === true));
       }
 
       if (resource === "packets" && id && action === "decide" && req.method === "POST") {

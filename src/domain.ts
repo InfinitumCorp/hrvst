@@ -116,12 +116,12 @@ export class HrvstBackend {
     return capture;
   }
 
-  refine(captureId: string): { capture: Capture; packet?: Packet } {
+  refine(captureId: string, optedIn = false): { capture: Capture; packet?: Packet } {
     const capture = this.requireCapture(captureId);
     if (capture.status === "deleted") throw new HrvstError("capture was deleted", 409);
-    if (RESTRICTED.has(capture.placeClass)) {
+    if (RESTRICTED.has(capture.placeClass) && !optedIn) {
       capture.status = "excluded";
-      capture.excludedReason = `${capture.placeClass} is not eligible to leave the device`;
+      capture.excludedReason = `${capture.placeClass} stays on the device until the owner opts in`;
       return { capture };
     }
     const filtered = privacyFilter(capture.note);
@@ -129,6 +129,7 @@ export class HrvstBackend {
     capture.redactions = filtered.redactions;
     capture.status = "refined";
     const packet = this.packagePacket(capture);
+    if (RESTRICTED.has(capture.placeClass)) packet.permittedUses = [`restricted:${capture.placeClass}`];
     return { capture, packet };
   }
 
