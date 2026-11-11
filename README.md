@@ -10,7 +10,7 @@ A kept or listed packet can emit a `fault` signal for :\ARCHITECT\. The signal i
 
 ## API
 
-`HRVST_API_TOKEN` is required whenever the process is reachable by anyone else.
+`HRVST_API_TOKEN` is required whenever the process is reachable by anyone else. Services send it as `Authorization: Bearer`. People sign in with Cumulus ID in a product and send their Cumulus ID token instead; HRVST checks it at `CID_ISSUER` (default `https://id.cumuluscloud.app`, can be a mirror that loads in Russia) and lets them act only as their own CID.
 
 | Method | Path | |
 |---|---|---|
