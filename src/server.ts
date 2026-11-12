@@ -58,6 +58,11 @@ function ownerFor(who: Caller, asked: unknown): string {
   return who.profile.cid;
 }
 
+/** The CID a person acts as; undefined for a service, which may act for anyone. */
+function actorOf(who: Caller): string | undefined {
+  return who.kind === "person" ? who.profile.cid : undefined;
+}
+
 function place(value: unknown): PlaceClass {
   if (typeof value !== "string" || !PLACES.has(value as PlaceClass)) throw new HrvstError("invalid placeClass");
   return value as PlaceClass;
@@ -85,6 +90,12 @@ export function createHrvstServer(
       const who = await caller(req, token, verifyCid);
       if (!who) throw new HrvstError("sign in with Cumulus ID, or send the service token", 401);
       const [, resource, id, action] = parts;
+      const actor = actorOf(who);
+      // Every successful change is written to HRVST_DATA_FILE (when set) before the reply goes out.
+      const saved = (status: number, data: unknown) => {
+        store.save();
+        json(res, status, data);
+      };
 
       if (resource === "conjure") {
         const owner = ownerFor(who, url.searchParams.get("owner") ?? "");
@@ -104,7 +115,8 @@ export function createHrvstServer(
         if (handled) return void (await sendWebResponse(res, handled));
       }
 
-      if (resource === "board" && req.method === "GET") return json(res, 200, store.snapshot());
+      // A service sees the whole board; a person sees their own silo, credits and grants, and open missions.
+      if (resource === "board" && req.method === "GET") return json(res, 200, actor ? store.snapshotFor(actor) : store.snapshot());
 
       // FIRM Suite: FIRM, FIRM Wallet, Firmament Network and $HRVST; with ?owner=, that CID's credits.
       if (resource === "firm" && req.method === "GET" && !id) {
@@ -121,12 +133,12 @@ export function createHrvstServer(
           placeClass: place(body.placeClass),
           mediaKind: body.mediaKind === "note" ? "note" : "glasses",
         });
-        return json(res, 201, capture);
+        return saved(201, capture);
       }
 
       if (resource === "captures" && id && action === "refine" && req.method === "POST") {
         const body = await readBody(req);
-        return json(res, 200, store.refine(id, body.optedIn === true));
+        return saved(200, store.refine(id, body.optedIn === true, actor));
       }
 
       if (resource === "packets" && id && action === "decide" && req.method === "POST") {
@@ -136,21 +148,21 @@ export function createHrvstServer(
           throw new HrvstError("action must be keep, list, or delete");
         }
         const price = body.priceCredits === undefined ? undefined : Number(body.priceCredits);
-        return json(res, 200, store.decide(id, decision, price));
+        return saved(200, store.decide(id, decision, price, actor));
       }
 
       if (resource === "packets" && id && action === "license" && req.method === "POST") {
         const body = await readBody(req);
-        return json(res, 201, store.license(id, String(body.licensee ?? "")));
+        return saved(201, store.license(id, ownerFor(who, body.licensee)));
       }
 
       if (resource === "packets" && id && action === "signal" && req.method === "POST") {
-        return json(res, 202, store.signalArchitect(id));
+        return saved(202, store.signalArchitect(id, actor));
       }
 
       if (resource === "missions" && req.method === "POST" && !id) {
         const body = await readBody(req);
-        return json(res, 201, store.postMission({
+        return saved(201, store.postMission({
           buyer: ownerFor(who, body.buyer),
           title: String(body.title ?? ""),
           brief: String(body.brief ?? ""),
@@ -161,9 +173,9 @@ export function createHrvstServer(
 
       if (resource === "missions" && id && req.method === "POST") {
         const body = await readBody(req);
-        if (action === "claim") return json(res, 200, store.claimMission(id, ownerFor(who, body.owner)));
-        if (action === "submit") return json(res, 200, store.submitMission(id, String(body.packetId ?? "")));
-        if (action === "accept") return json(res, 200, store.acceptMission(id));
+        if (action === "claim") return saved(200, store.claimMission(id, ownerFor(who, body.owner)));
+        if (action === "submit") return saved(200, store.submitMission(id, String(body.packetId ?? ""), actor));
+        if (action === "accept") return saved(200, store.acceptMission(id, actor));
       }
 
       throw new HrvstError("not found", 404);

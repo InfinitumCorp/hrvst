@@ -26,9 +26,15 @@ A kept or listed packet can emit a `fault` signal for :\ARCHITECT\. The signal i
 | POST | `/v1/missions/:id/submit` | `{ packetId }` |
 | POST | `/v1/missions/:id/accept` | pays the claimer |
 
+A person only acts on what they own: refine their own captures, keep, list, delete or signal their own packets, license for themselves, submit missions they claimed, and accept missions they posted. Anything else is `403`. For a person, `GET /v1/board` shows their own silo, credits, grants and signals, plus open missions and their own missions. A service with `HRVST_API_TOKEN` sees the whole board.
+
+## Storage
+
+Set `HRVST_DATA_FILE` (for example `data/hrvst.json`) to keep captures, packets, missions, grants, the credit ledger and the proof-chain tip across restarts. Each successful change is written before the reply goes out, to a temporary file that is then renamed over the old one, with owner-only permissions. A new data file starts empty; set `HRVST_SEED=1` once to load the demo data. Without `HRVST_DATA_FILE` everything lives in memory with the demo data, and a restart loses it. The file holds personal data, so keep it out of git (`data/` is ignored) and on an encrypted disk. One process per data file.
+
 ```bash
 npm test
-HRVST_API_TOKEN=change-me npm start
+HRVST_API_TOKEN=change-me HRVST_DATA_FILE=data/hrvst.json npm start
 ```
 
 Proof of perspective is a SHA-256 chain over owner, capture time, raw digest, and the filtered observation. Raw media is not stored.
