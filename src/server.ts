@@ -58,6 +58,11 @@ function ownerFor(who: Caller, asked: unknown): string {
   return who.profile.cid;
 }
 
+/** Some routes are for HRVST's own services (the Architect bridge, settlement), never for people. */
+function serviceOnly(who: Caller) {
+  if (who.kind !== "service") throw new HrvstError("this route is for services", 403);
+}
+
 /** The CID a person acts as; undefined for a service, which may act for anyone. */
 function actorOf(who: Caller): string | undefined {
   return who.kind === "person" ? who.profile.cid : undefined;
@@ -181,6 +186,24 @@ export function createHrvstServer(
         if (action === "submit") return saved(200, store.submitMission(id, String(body.packetId ?? ""), actor));
         if (action === "accept") return saved(200, store.acceptMission(id, actor));
         if (action === "cancel") return saved(200, store.cancelMission(id, actor));
+        if (action === "release") return saved(200, store.releaseMission(id, actor));
+        if (action === "reject") return saved(200, store.rejectMission(id, actor));
+      }
+
+      // The Architect bridge marks a fault as handed over, with Architect's run or score id.
+      if (resource === "signals" && id && action === "delivered" && req.method === "POST") {
+        serviceOnly(who);
+        const body = await readBody(req);
+        const scoreId = body.architectScoreId === undefined ? undefined : String(body.architectScoreId);
+        return saved(200, store.markDelivered(id, scoreId));
+      }
+
+      // Settlement issues Harvest Credits once a buyer has paid outside HRVST.
+      if (resource === "credits" && !id && req.method === "POST") {
+        serviceOnly(who);
+        const body = await readBody(req);
+        const balance = store.topUp(String(body.account ?? ""), Number(body.credits), String(body.reason ?? ""));
+        return saved(200, { account: String(body.account).trim(), balance });
       }
 
       throw new HrvstError("not found", 404);
