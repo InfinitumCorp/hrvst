@@ -6,6 +6,7 @@ import { conjureRoutesFromEnv, toWebRequest, sendWebResponse } from "./conjure/c
 import { openClawRoutesFromEnv } from "./openclaw/openclaw.mjs";
 import { searchRoutesFromEnv } from "./search/search.mjs";
 import { createCidVerifier, type CidProfile } from "./cid.ts";
+import { billingEnabled, createRevenueClient, planCard, returnNotice, startBuyerAccess, BUYER_PLAN, type RevenueClient } from "./billing.ts";
 
 const PLACES = new Set<PlaceClass>([
   "street",
@@ -76,6 +77,7 @@ function place(value: unknown): PlaceClass {
 export function createHrvstServer(
   token = process.env.HRVST_API_TOKEN,
   verifyCid: (t: string) => Promise<CidProfile | null> = createCidVerifier(),
+  revenue: RevenueClient | null = billingEnabled() ? createRevenueClient() : null,
 ): ReturnType<typeof createServer> {
   const store = getBackend();
   // @conjure: POST /v1/conjure { text, context?, source? } and GET /v1/conjure/<ticket>, as ?owner=<CID>.
@@ -118,6 +120,30 @@ export function createHrvstServer(
         const owner = ownerFor(who, url.searchParams.get("owner") ?? "");
         const handled = await search(await toWebRequest(req), { user: owner || null });
         if (handled) return void (await sendWebResponse(res, handled));
+      }
+
+      // Plans and billing for the signed-in person, through the Infinitum revenue Worker (Stripe).
+      // HRVST forwards the person's Cumulus ID token; it never holds a Stripe key.
+      if (resource === "account" && id === "plan") {
+        if (!revenue) throw new HrvstError("not found", 404);
+        if (who.kind !== "person") throw new HrvstError("sign in with Cumulus ID to see plans and billing", 403);
+        const cidToken = req.headers.authorization!.replace(/^Bearer\s+/i, "");
+        if (!action && req.method === "GET") {
+          const [catalog, current] = await Promise.all([revenue.catalog(), revenue.entitlement(cidToken)]);
+          return json(res, 200, planCard(catalog, current, returnNotice(url.searchParams.get("billing"))));
+        }
+        if (req.method === "POST" && action) {
+          const body = await readBody(req);
+          const returnUrl = String(body.returnUrl ?? process.env.HRVST_RETURN_URL ?? "");
+          if (!/^https?:\/\//.test(returnUrl)) throw new HrvstError("returnUrl is required");
+          if (action === "checkout") {
+            const planId = String(body.planId ?? "");
+            if (planId === BUYER_PLAN) return json(res, 200, await startBuyerAccess(revenue, cidToken, returnUrl, body.orgName as string | undefined));
+            return json(res, 200, { status: "checkout", ...(await revenue.checkout(cidToken, planId, returnUrl)) });
+          }
+          if (action === "portal") return json(res, 200, await revenue.portal(cidToken, returnUrl));
+        }
+        throw new HrvstError("not found", 404);
       }
 
       // A service sees the whole board; a person sees their own silo, credits and grants, and open missions.
