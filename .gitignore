@@ -1,3 +1,5 @@
 node_modules
 dist
 .hrvst
+data
+*.tmp

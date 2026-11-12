@@ -1,4 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import {
   CONTRIBUTOR_SHARE_BPS,
   PLATFORM_FEE_BPS,
@@ -55,6 +57,11 @@ export function privacyFilter(raw: string): { text: string; redactions: string[]
     }
   }
   return { text: text.replace(/\s+/g, " ").trim(), redactions };
+}
+
+/** A person (actor) may only act on what they own. Services pass no actor. */
+function mustBe(actor: string | undefined, owner: string | undefined, what: string) {
+  if (actor !== undefined && actor !== owner) throw new HrvstError(`only the ${what} can do that`, 403);
 }
 
 function qualityOf(text: string, placeClass: PlaceClass): number {
@@ -116,8 +123,9 @@ export class HrvstBackend {
     return capture;
   }
 
-  refine(captureId: string, optedIn = false): { capture: Capture; packet?: Packet } {
+  refine(captureId: string, optedIn = false, actor?: string): { capture: Capture; packet?: Packet } {
     const capture = this.requireCapture(captureId);
+    mustBe(actor, capture.owner, "owner");
     if (capture.status === "deleted") throw new HrvstError("capture was deleted", 409);
     if (RESTRICTED.has(capture.placeClass) && !optedIn) {
       capture.status = "excluded";
@@ -157,8 +165,9 @@ export class HrvstBackend {
     return packet;
   }
 
-  decide(packetId: string, action: "keep" | "list" | "delete", priceCredits?: number): Packet {
+  decide(packetId: string, action: "keep" | "list" | "delete", priceCredits?: number, actor?: string): Packet {
     const packet = this.requirePacket(packetId);
+    mustBe(actor, packet.owner, "owner");
     if (packet.status === "retired") throw new HrvstError("packet is retired", 409);
     if (action === "delete") {
       packet.status = "retired";
@@ -214,8 +223,9 @@ export class HrvstBackend {
     return mission;
   }
 
-  submitMission(missionId: string, packetId: string): Mission {
+  submitMission(missionId: string, packetId: string, actor?: string): Mission {
     const mission = this.requireMission(missionId);
+    mustBe(actor, mission.claimer, "claimer");
     if (mission.status !== "claimed" || !mission.claimer) throw new HrvstError("mission is not claimed", 409);
     const packet = this.requirePacket(packetId);
     if (packet.owner !== mission.claimer) throw new HrvstError("packet is not owned by the claimer");
@@ -227,8 +237,9 @@ export class HrvstBackend {
     return mission;
   }
 
-  acceptMission(missionId: string): Mission {
+  acceptMission(missionId: string, actor?: string): Mission {
     const mission = this.requireMission(missionId);
+    mustBe(actor, mission.buyer, "buyer");
     if (mission.status !== "submitted" || !mission.packetId || !mission.claimer) {
       throw new HrvstError("mission has no submission", 409);
     }
@@ -280,8 +291,9 @@ export class HrvstBackend {
   }
 
   /** Observe → Understand → Act. A kept or listed fault becomes an Architect score, still unapproved. */
-  signalArchitect(packetId: string): ArchitectSignal {
+  signalArchitect(packetId: string, actor?: string): ArchitectSignal {
     const packet = this.requirePacket(packetId);
+    mustBe(actor, packet.owner, "owner");
     if (packet.status !== "private" && packet.status !== "listed") {
       throw new HrvstError("only an approved packet can start work");
     }
@@ -317,6 +329,51 @@ export class HrvstBackend {
     };
   }
 
+  /** What one person may see: their own silo, credits and grants, plus open missions and their own missions. */
+  snapshotFor(cid: string): Board {
+    const packets = [...this.packets.values()].filter((p) => p.owner === cid);
+    const mine = new Set(packets.map((p) => p.id));
+    return {
+      captures: [...this.captures.values()].filter((c) => c.owner === cid),
+      packets,
+      missions: [...this.missions.values()].filter((m) => m.status === "open" || m.buyer === cid || m.claimer === cid),
+      grants: this.grants.filter((g) => g.licensee === cid || mine.has(g.packetId)),
+      ledger: this.ledger.filter((e) => e.account === cid),
+      signals: this.signals.filter((s) => mine.has(s.packetId)),
+      balances: { [cid]: this.balance(cid) },
+    };
+  }
+
+  /** Everything needed to rebuild the store, including the proof-chain tip. */
+  toJSON(): StoredState {
+    return { version: 1, ...this.snapshot(), chainTip: this.chainTip };
+  }
+
+  static fromJSON(state: StoredState): HrvstBackend {
+    if (state.version !== 1) throw new Error(`unknown HRVST data version ${String(state.version)}`);
+    const store = new HrvstBackend();
+    store.balances = new Map(Object.entries(state.balances));
+    store.captures = new Map(state.captures.map((c) => [c.id, c]));
+    store.packets = new Map(state.packets.map((p) => [p.id, p]));
+    store.missions = new Map(state.missions.map((m) => [m.id, m]));
+    store.grants = state.grants;
+    store.ledger = state.ledger;
+    store.signals = state.signals;
+    store.chainTip = state.chainTip;
+    return store;
+  }
+
+  /** Write the store to disk atomically (temp file, then rename). No-op without a data file. */
+  save(file = this.file) {
+    if (!file) return;
+    mkdirSync(dirname(file), { recursive: true });
+    const tmp = `${file}.${process.pid}.tmp`;
+    writeFileSync(tmp, JSON.stringify(this.toJSON()), { mode: 0o600 });
+    renameSync(tmp, file);
+  }
+
+  file?: string;
+
   private requireCapture(id: string): Capture {
     const capture = this.captures.get(id);
     if (!capture) throw new HrvstError("capture not found", 404);
@@ -336,12 +393,31 @@ export class HrvstBackend {
   }
 }
 
+export type StoredState = Board & { version: 1; chainTip: string | null };
+
 let backend: HrvstBackend | null = null;
+
+/**
+ * Open the store. With a data file it is loaded from disk and survives restarts; a new file starts empty
+ * unless `seedDemo` is set. Without a data file the store lives in memory with the demo seed.
+ */
+export function openBackend(file?: string, seedDemo = !file): HrvstBackend {
+  if (file && existsSync(file)) {
+    const store = HrvstBackend.fromJSON(JSON.parse(readFileSync(file, "utf8")) as StoredState);
+    store.file = file;
+    return store;
+  }
+  const store = new HrvstBackend();
+  if (seedDemo) seed(store);
+  store.file = file;
+  store.save();
+  return store;
+}
 
 export function getBackend(): HrvstBackend {
   if (!backend) {
-    backend = new HrvstBackend();
-    seed(backend);
+    const file = process.env.HRVST_DATA_FILE || undefined;
+    backend = openBackend(file, file ? process.env.HRVST_SEED === "1" : true);
   }
   return backend;
 }
