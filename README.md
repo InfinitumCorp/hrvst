@@ -19,12 +19,15 @@ A kept or listed packet can emit a `fault` signal for :\ARCHITECT\. The signal i
 | POST | `/v1/captures` | `{ owner, note, placeLabel, placeClass }` |
 | POST | `/v1/captures/:id/refine` | filter, or exclude a restricted place unless `{ "optedIn": true }` |
 | POST | `/v1/packets/:id/decide` | `{ action: keep|list|delete, priceCredits? }` |
+| GET | `/v1/market` | listed packets: place, quality, uses, price; no owner, no observation |
 | POST | `/v1/packets/:id/license` | `{ licensee }` |
+| GET | `/v1/grants/:id` | the licensee collects the observation and its proof; the contributor stays anonymous |
 | POST | `/v1/packets/:id/signal` | queue an Architect fault |
-| POST | `/v1/missions` | buyer posts a rewarded request |
+| POST | `/v1/missions` | buyer posts a rewarded request; the reward is held in escrow; restricted places are refused |
 | POST | `/v1/missions/:id/claim` | `{ owner }` |
 | POST | `/v1/missions/:id/submit` | `{ packetId }` |
-| POST | `/v1/missions/:id/accept` | pays the claimer |
+| POST | `/v1/missions/:id/accept` | pays the claimer from escrow |
+| POST | `/v1/missions/:id/cancel` | buyer withdraws an open mission; the reward comes back |
 
 A person only acts on what they own: refine their own captures, keep, list, delete or signal their own packets, license for themselves, submit missions they claimed, and accept missions they posted. Anything else is `403`. For a person, `GET /v1/board` shows their own silo, credits, grants and signals, plus open missions and their own missions. A service with `HRVST_API_TOKEN` sees the whole board.
 

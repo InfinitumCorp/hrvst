@@ -8,14 +8,19 @@ import {
   type Board,
   type Capture,
   type CreditEntry,
+  type Delivery,
   type Grant,
+  type Listing,
   type Mission,
   type Packet,
   type PlaceClass,
 } from "./types.ts";
 
 export { CONTRIBUTOR_SHARE_BPS, PLATFORM_FEE_BPS };
-export type { ArchitectSignal, Board, Capture, Grant, Mission, Packet, PlaceClass };
+export type { ArchitectSignal, Board, Capture, Delivery, Grant, Listing, Mission, Packet, PlaceClass };
+
+/** Holds mission rewards between posting and acceptance. */
+export const ESCROW = "escrow";
 
 const RESTRICTED = new Set<PlaceClass>(["private_residence", "school", "hospital", "military", "home_interior"]);
 
@@ -196,8 +201,10 @@ export class HrvstBackend {
   }): Mission {
     const buyer = input.buyer.trim();
     if (!buyer || !input.title.trim()) throw new HrvstError("buyer and title are required");
-    if (input.rewardCredits < 1) throw new HrvstError("reward must be at least 1 credit");
-    if ((this.balances.get(buyer) ?? 0) < input.rewardCredits) {
+    if (!Number.isFinite(input.rewardCredits) || input.rewardCredits < 1) throw new HrvstError("reward must be at least 1 credit");
+    if (RESTRICTED.has(input.placeClass)) throw new HrvstError(`a mission cannot ask for ${input.placeClass}`);
+    const reward = Math.round(input.rewardCredits);
+    if ((this.balances.get(buyer) ?? 0) < reward) {
       throw new HrvstError("buyer cannot cover the reward");
     }
     const mission: Mission = {
@@ -205,12 +212,28 @@ export class HrvstBackend {
       buyer,
       title: input.title.trim(),
       brief: input.brief.trim(),
-      rewardCredits: Math.round(input.rewardCredits),
+      rewardCredits: reward,
       placeClass: input.placeClass,
       status: "open",
       createdAt: iso(),
+      escrowed: true,
     };
+    this.credit(buyer, -reward, `escrow ${mission.id}`);
+    this.credit(ESCROW, reward, `escrow ${mission.id}`);
     this.missions.set(mission.id, mission);
+    return mission;
+  }
+
+  /** The buyer withdraws an open mission and the held reward comes back. */
+  cancelMission(missionId: string, actor?: string): Mission {
+    const mission = this.requireMission(missionId);
+    mustBe(actor, mission.buyer, "buyer");
+    if (mission.status !== "open") throw new HrvstError("only an open mission can be cancelled", 409);
+    if (mission.escrowed) {
+      this.credit(ESCROW, -mission.rewardCredits, `refund ${mission.id}`);
+      this.credit(mission.buyer, mission.rewardCredits, `refund ${mission.id}`);
+    }
+    mission.status = "cancelled";
     return mission;
   }
 
@@ -243,7 +266,7 @@ export class HrvstBackend {
     if (mission.status !== "submitted" || !mission.packetId || !mission.claimer) {
       throw new HrvstError("mission has no submission", 409);
     }
-    this.credit(mission.buyer, -mission.rewardCredits, `mission ${mission.id}`);
+    this.credit(mission.escrowed ? ESCROW : mission.buyer, -mission.rewardCredits, `mission ${mission.id}`);
     const platform = Math.round((mission.rewardCredits * PLATFORM_FEE_BPS) / 10_000);
     const contributor = mission.rewardCredits - platform;
     this.credit(mission.claimer, contributor, `mission ${mission.id}`);
@@ -288,6 +311,25 @@ export class HrvstBackend {
     };
     this.grants.push(grant);
     return grant;
+  }
+
+  /** Listed, unexpired packets as a buyer sees them before paying. */
+  market(): Listing[] {
+    const now = Date.now();
+    return [...this.packets.values()]
+      .filter((p) => p.status === "listed" && new Date(p.expiresAt).getTime() >= now)
+      .map(({ id, placeLabel, quality, permittedUses, priceCredits, createdAt, expiresAt }) => ({
+        id, placeLabel, quality, permittedUses, priceCredits, createdAt, expiresAt,
+      }));
+  }
+
+  /** The licensee collects what they paid for. The contributor stays anonymous. */
+  delivery(grantId: string, actor?: string): Delivery {
+    const grant = this.grants.find((g) => g.id === grantId);
+    if (!grant) throw new HrvstError("grant not found", 404);
+    mustBe(actor, grant.licensee, "licensee");
+    const { owner: _o, captureId: _c, status: _s, priceCredits: _p, ...packet } = this.requirePacket(grant.packetId);
+    return { grant, packet };
   }
 
   /** Observe → Understand → Act. A kept or listed fault becomes an Architect score, still unapproved. */
