@@ -14,7 +14,7 @@ export type PlaceClass =
 
 export type CaptureStatus = "captured" | "refined" | "excluded" | "deleted";
 export type PacketStatus = "draft" | "private" | "listed" | "retired";
-export type MissionStatus = "open" | "claimed" | "submitted" | "accepted" | "rejected";
+export type MissionStatus = "open" | "claimed" | "submitted" | "accepted" | "rejected" | "cancelled";
 
 export interface Capture {
   id: string;
@@ -57,6 +57,25 @@ export interface Mission {
   claimer?: string;
   packetId?: string;
   createdAt: string;
+  /** The reward was moved to the escrow account when the mission was posted. */
+  escrowed?: boolean;
+}
+
+/** What a buyer sees before paying: no owner, no observation. */
+export interface Listing {
+  id: string;
+  placeLabel: string;
+  quality: number;
+  permittedUses: string[];
+  priceCredits: number;
+  createdAt: string;
+  expiresAt: string;
+}
+
+/** What a licensee receives: the observation and its proof, without the contributor's identity. */
+export interface Delivery {
+  grant: Grant;
+  packet: Omit<Packet, "owner" | "captureId" | "status" | "priceCredits">;
 }
 
 export interface Grant {

@@ -118,6 +118,10 @@ export function createHrvstServer(
       // A service sees the whole board; a person sees their own silo, credits and grants, and open missions.
       if (resource === "board" && req.method === "GET") return json(res, 200, actor ? store.snapshotFor(actor) : store.snapshot());
 
+      // The market: listed packets without owner or observation. Licensees collect at /v1/grants/:id.
+      if (resource === "market" && req.method === "GET" && !id) return json(res, 200, store.market());
+      if (resource === "grants" && id && !action && req.method === "GET") return json(res, 200, store.delivery(id, actor));
+
       // FIRM Suite: FIRM, FIRM Wallet, Firmament Network and $HRVST; with ?owner=, that CID's credits.
       if (resource === "firm" && req.method === "GET" && !id) {
         const owner = ownerFor(who, url.searchParams.get("owner") ?? undefined) || undefined;
@@ -176,6 +180,7 @@ export function createHrvstServer(
         if (action === "claim") return saved(200, store.claimMission(id, ownerFor(who, body.owner)));
         if (action === "submit") return saved(200, store.submitMission(id, String(body.packetId ?? ""), actor));
         if (action === "accept") return saved(200, store.acceptMission(id, actor));
+        if (action === "cancel") return saved(200, store.cancelMission(id, actor));
       }
 
       throw new HrvstError("not found", 404);
