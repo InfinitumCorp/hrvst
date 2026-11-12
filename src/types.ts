@@ -55,7 +55,10 @@ export interface Mission {
   placeClass: PlaceClass;
   status: MissionStatus;
   claimer?: string;
+  claimedAt?: string;
   packetId?: string;
+  /** Packets the buyer turned down for this mission. */
+  rejectedPackets?: string[];
   createdAt: string;
   /** The reward was moved to the escrow account when the mission was posted. */
   escrowed?: boolean;

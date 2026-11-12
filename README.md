@@ -6,7 +6,7 @@ Personal data exchange. A capture is refined, privacy-filtered, and packaged. Th
 
 **Premise** ([premise.com](https://premise.com)) is the data buyer to approach. They already pay people for retail-shelf audits and public-place inspections. Status: prospective. There is no contract, no Harvest Credit balance, and no licence until a person signs one. A mission from Premise may ask only for `retail`, `street`, `public_building`, or `field`.
 
-A kept or listed packet can emit a `fault` signal for :\ARCHITECT\. The signal is a service request. Architect still stops before any irreversible step. The standalone bridge is `examples/architect-signal.ts`, which posts to `POST /v1/signals/hrvst` on the Architect server.
+A kept or listed packet can emit a `fault` signal for :\ARCHITECT\. The signal is a service request. Architect still stops before any irreversible step. The standalone bridge is `examples/architect-signal.ts`. `deliverPending` posts each undelivered fault to `POST /v1/signals/hrvst` on the Architect server, then marks it delivered in HRVST so it is never sent twice.
 
 ## API
 
@@ -27,7 +27,11 @@ A kept or listed packet can emit a `fault` signal for :\ARCHITECT\. The signal i
 | POST | `/v1/missions/:id/claim` | `{ owner }` |
 | POST | `/v1/missions/:id/submit` | `{ packetId }` |
 | POST | `/v1/missions/:id/accept` | pays the claimer from escrow |
-| POST | `/v1/missions/:id/cancel` | buyer withdraws an open mission; the reward comes back |
+| POST | `/v1/missions/:id/cancel` | buyer withdraws an open mission, or one claimed over 7 days ago with no submission; the reward comes back |
+| POST | `/v1/missions/:id/release` | claimer gives the mission back |
+| POST | `/v1/missions/:id/reject` | buyer turns a submission down; the mission reopens, the reward stays held, and that packet cannot be sent again |
+| POST | `/v1/signals/:id/delivered` | service only: the Architect bridge marks a fault handed over, `{ architectScoreId? }` |
+| POST | `/v1/credits` | service only: issue Harvest Credits after payment, `{ account, credits, reason }` |
 
 A person only acts on what they own: refine their own captures, keep, list, delete or signal their own packets, license for themselves, submit missions they claimed, and accept missions they posted. Anything else is `403`. For a person, `GET /v1/board` shows their own silo, credits, grants and signals, plus open missions and their own missions. A service with `HRVST_API_TOKEN` sees the whole board.
 

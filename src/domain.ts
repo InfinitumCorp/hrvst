@@ -22,6 +22,9 @@ export type { ArchitectSignal, Board, Capture, Delivery, Grant, Listing, Mission
 /** Holds mission rewards between posting and acceptance. */
 export const ESCROW = "escrow";
 
+/** After this long without a submission, the buyer may cancel a claimed mission. */
+export const CLAIM_TIMEOUT_MS = 1000 * 60 * 60 * 24 * 7;
+
 const RESTRICTED = new Set<PlaceClass>(["private_residence", "school", "hospital", "military", "home_interior"]);
 
 export class HrvstError extends Error {
@@ -228,7 +231,10 @@ export class HrvstBackend {
   cancelMission(missionId: string, actor?: string): Mission {
     const mission = this.requireMission(missionId);
     mustBe(actor, mission.buyer, "buyer");
-    if (mission.status !== "open") throw new HrvstError("only an open mission can be cancelled", 409);
+    const stale = mission.status === "claimed" && Date.now() - new Date(mission.claimedAt ?? 0).getTime() > CLAIM_TIMEOUT_MS;
+    if (mission.status !== "open" && !stale) {
+      throw new HrvstError("only an open mission, or one claimed over 7 days ago with no submission, can be cancelled", 409);
+    }
     if (mission.escrowed) {
       this.credit(ESCROW, -mission.rewardCredits, `refund ${mission.id}`);
       this.credit(mission.buyer, mission.rewardCredits, `refund ${mission.id}`);
@@ -243,6 +249,32 @@ export class HrvstBackend {
     if (owner === mission.buyer) throw new HrvstError("buyer cannot claim their own mission");
     mission.status = "claimed";
     mission.claimer = owner;
+    mission.claimedAt = iso();
+    return mission;
+  }
+
+  /** The claimer gives the mission back so someone else can take it. */
+  releaseMission(missionId: string, actor?: string): Mission {
+    const mission = this.requireMission(missionId);
+    mustBe(actor, mission.claimer, "claimer");
+    if (mission.status !== "claimed") throw new HrvstError("only a claimed mission can be released", 409);
+    return this.reopen(mission);
+  }
+
+  /** The buyer turns a submission down. The mission reopens and the reward stays in escrow. */
+  rejectMission(missionId: string, actor?: string): Mission {
+    const mission = this.requireMission(missionId);
+    mustBe(actor, mission.buyer, "buyer");
+    if (mission.status !== "submitted" || !mission.packetId) throw new HrvstError("mission has no submission", 409);
+    mission.rejectedPackets = [...(mission.rejectedPackets ?? []), mission.packetId];
+    return this.reopen(mission);
+  }
+
+  private reopen(mission: Mission): Mission {
+    mission.status = "open";
+    delete mission.claimer;
+    delete mission.claimedAt;
+    delete mission.packetId;
     return mission;
   }
 
@@ -252,6 +284,7 @@ export class HrvstBackend {
     if (mission.status !== "claimed" || !mission.claimer) throw new HrvstError("mission is not claimed", 409);
     const packet = this.requirePacket(packetId);
     if (packet.owner !== mission.claimer) throw new HrvstError("packet is not owned by the claimer");
+    if (mission.rejectedPackets?.includes(packet.id)) throw new HrvstError("the buyer already turned this packet down", 409);
     if (packet.status === "draft" || packet.status === "retired") {
       throw new HrvstError("packet must be kept or listed before it can fulfil a mission");
     }
@@ -289,6 +322,9 @@ export class HrvstBackend {
     const packet = this.requirePacket(packetId);
     if (packet.status !== "listed") throw new HrvstError("packet is not listed", 409);
     if (licensee === packet.owner) throw new HrvstError("owner already holds the packet");
+    if (this.grants.some((g) => g.packetId === packet.id && g.licensee === licensee)) {
+      throw new HrvstError("licensee already holds this packet", 409);
+    }
     if (new Date(packet.expiresAt).getTime() < Date.now()) {
       packet.status = "retired";
       throw new HrvstError("packet has expired", 409);
@@ -352,11 +388,22 @@ export class HrvstBackend {
     return signal;
   }
 
-  markDelivered(signalId: string): ArchitectSignal {
+  markDelivered(signalId: string, architectScoreId?: string): ArchitectSignal {
     const signal = this.signals.find((item) => item.id === signalId);
     if (!signal) throw new HrvstError("signal not found", 404);
     signal.delivered = true;
+    if (architectScoreId) signal.architectScoreId = architectScoreId;
     return signal;
+  }
+
+  /** Issue Harvest Credits to an account (a purchase or a grant settled outside HRVST). */
+  topUp(account: string, credits: number, reason: string): number {
+    const who = account.trim();
+    if (!who || who === ESCROW || who === "platform") throw new HrvstError("a person or buyer account is required");
+    if (!Number.isInteger(credits) || credits < 1) throw new HrvstError("credits must be a whole number of at least 1");
+    if (!reason.trim()) throw new HrvstError("a reason is required");
+    this.credit(who, credits, `top up: ${reason.trim()}`);
+    return this.balance(who);
   }
 
   snapshot(): Board {
