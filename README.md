@@ -32,8 +32,15 @@ A kept or listed packet can emit a `fault` signal for :\ARCHITECT\. The signal i
 | POST | `/v1/missions/:id/reject` | buyer turns a submission down; the mission reopens, the reward stays held, and that packet cannot be sent again |
 | POST | `/v1/signals/:id/delivered` | service only: the Architect bridge marks a fault handed over, `{ architectScoreId? }` |
 | POST | `/v1/credits` | service only: issue Harvest Credits after payment, `{ account, credits, reason }` |
+| GET | `/v1/account/plan` | person only: the plan card, with the HRVST plans, the current plan, and a note after a return from Checkout (`?billing=success|cancelled`) |
+| POST | `/v1/account/plan/checkout` | person only: `{ planId, returnUrl, orgName? }` returns `{ status: "checkout", url }` for Stripe Checkout |
+| POST | `/v1/account/plan/portal` | person only: `{ returnUrl }` returns `{ url }` for the Stripe customer portal (Manage billing) |
 
 A person only acts on what they own: refine their own captures, keep, list, delete or signal their own packets, license for themselves, submit missions they claimed, and accept missions they posted. Anything else is `403`. For a person, `GET /v1/board` shows their own silo, credits, grants and signals, plus open missions and their own missions. A service with `HRVST_API_TOKEN` sees the whole board.
+
+## Plans and billing
+
+The plans are [HRVST] Free, Pro Contributor (`hrvst_pro`, self-serve) and Buyer Access (`hrvst_buyer`, sales-assisted, for organisations only). Payment runs through Infinitum's revenue Worker (`REVENUE_URL`, default `https://infinitum-revenue.infinitumcorp.workers.dev`). HRVST forwards the person's Cumulus ID token to it and never holds a Stripe key. A product renders the plan card from `GET /v1/account/plan`. Subscribe opens the `url` from `/checkout`. Manage billing opens the `url` from `/portal`. Buyer Access first switches the person's account to a business (`POST /v1/me/org`). Checkout opens once Infinitum approves the organisation. Until then the answer is `{ status: "pending_approval", message }`. Set `HRVST_BILLING=off` on any MIL or defense deployment to hide billing.
 
 ## Storage
 
