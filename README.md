@@ -42,6 +42,15 @@ A person only acts on what they own: refine their own captures, keep, list, dele
 
 The plans are [HRVST] Free, Pro Contributor (`hrvst_pro`, self-serve) and Buyer Access (`hrvst_buyer`, sales-assisted, for organisations only). Payment runs through Infinitum's revenue Worker (`REVENUE_URL`, default `https://infinitum-revenue.infinitumcorp.workers.dev`). HRVST forwards the person's Cumulus ID token to it and never holds a Stripe key. A product renders the plan card from `GET /v1/account/plan`. Subscribe opens the `url` from `/checkout`. Manage billing opens the `url` from `/portal`. Buyer Access first switches the person's account to a business (`POST /v1/me/org`). Checkout opens once Infinitum approves the organisation. Until then the answer is `{ status: "pending_approval", message }`. Set `HRVST_BILLING=off` on any MIL or defense deployment to hide billing.
 
+## Web app
+
+`GET /` serves the HRVST web app: Silo (capture, refine, keep, list, delete, report a fault), Market, Missions (post, claim, submit, give back, accept, reject, cancel), Purchases (open what you bought, with its proof) and Credits. People sign in with **Cumulus ID**; signed out, the page offers "Sign in with Cumulus ID" and "Create a Cumulus ID" (the same flow with `prompt=create`, so a new account comes straight back signed in). There is no HRVST password or PIN.
+
+- `HRVST_CID_CLIENT` (default `hrvst`): HRVST's client id at the issuer. **HRVST must be registered as a client** (with its production origin) in the issuer's client list before sign-in works.
+- `CID_ISSUER` (default `https://id.cumuluscloud.app`): used by both the page and the server's token check. Point it at a mirror that loads in Russia for a Russian deployment.
+
+The page loads only its own files (`src/app/`) under `script-src 'self'; style-src 'self'; connect-src 'self'`, builds every element with `textContent`, and keeps the token in the tab's `sessionStorage`. No analytics: HRVST is excluded from Amplitude.
+
 ## Storage
 
 Set `HRVST_DATA_FILE` (for example `data/hrvst.json`) to keep captures, packets, missions, grants, the credit ledger and the proof-chain tip across restarts. Each successful change is written before the reply goes out, to a temporary file that is then renamed over the old one, with owner-only permissions. A new data file starts empty; set `HRVST_SEED=1` once to load the demo data. Without `HRVST_DATA_FILE` everything lives in memory with the demo data, and a restart loses it. The file holds personal data, so keep it out of git (`data/` is ignored) and on an encrypted disk. One process per data file.

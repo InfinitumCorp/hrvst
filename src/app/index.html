@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[HRVST]</title>
+<link rel="stylesheet" href="/app/style.css">
+</head>
+<body>
+<header class="top">
+  <span class="brand">[HRVST]</span>
+  <span class="who" data-cumulus-id></span>
+</header>
+
+<main id="main">
+  <section id="signed-out" class="panel">
+    <h1>Your observations, your data.</h1>
+    <p>Capture what you see in public places. HRVST strips contact details and packages it. You keep it in your silo or list it, and buyers pay you in Harvest Credits. You receive 85 percent of every sale.</p>
+    <p>Homes, schools, hospitals and military sites stay on your device unless you opt in.</p>
+    <p class="muted" id="sign-in-note">Sign in with your Cumulus ID to start. No Cumulus ID yet? Create one and you come straight back here, signed in.</p>
+  </section>
+
+  <div id="signed-in" hidden>
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+
+    <nav class="tabs" aria-label="Sections">
+      <button type="button" data-tab="silo" aria-current="page">Silo</button>
+      <button type="button" data-tab="market">Market</button>
+      <button type="button" data-tab="missions">Missions</button>
+      <button type="button" data-tab="purchases">Purchases</button>
+      <button type="button" data-tab="credits">Credits</button>
+    </nav>
+
+    <section data-panel="silo" class="panel">
+      <h2>New capture</h2>
+      <form id="capture-form" class="form">
+        <label>What did you see?
+          <textarea name="note" maxlength="2000" required rows="3" placeholder="Lifted sidewalk slab outside the library, trip edge about two centimetres."></textarea>
+        </label>
+        <div class="row">
+          <label>Place
+            <input name="placeLabel" maxlength="120" placeholder="Library approach">
+          </label>
+          <label>Kind of place
+            <select name="placeClass" id="capture-place"></select>
+          </label>
+        </div>
+        <button type="submit">Capture</button>
+      </form>
+      <h2>Captures</h2>
+      <ul id="captures" class="list"></ul>
+      <h2>Packets</h2>
+      <ul id="packets" class="list"></ul>
+    </section>
+
+    <section data-panel="market" class="panel" hidden>
+      <h2>Market</h2>
+      <p class="muted">Listed packets. You see the place, quality and price before you buy; the observation and its proof come after.</p>
+      <ul id="market" class="list"></ul>
+    </section>
+
+    <section data-panel="missions" class="panel" hidden>
+      <h2>Post a mission</h2>
+      <form id="mission-form" class="form">
+        <label>Title <input name="title" maxlength="120" required placeholder="Accessible entrances on 4th"></label>
+        <label>Brief <textarea name="brief" maxlength="2000" rows="2" placeholder="Document step-free public entrances. No faces or plates."></textarea></label>
+        <div class="row">
+          <label>Reward (credits) <input name="rewardCredits" type="number" min="1" max="1000000" step="1" required value="50"></label>
+          <label>Kind of place <select name="placeClass" id="mission-place"></select></label>
+        </div>
+        <p class="muted">The reward is held from your credits until you accept a submission or cancel.</p>
+        <button type="submit">Post mission</button>
+      </form>
+      <h2>Missions</h2>
+      <ul id="missions" class="list"></ul>
+    </section>
+
+    <section data-panel="purchases" class="panel" hidden>
+      <h2>Purchases</h2>
+      <ul id="purchases" class="list"></ul>
+      <div id="delivery" class="delivery" hidden></div>
+    </section>
+
+    <section data-panel="credits" class="panel" hidden>
+      <h2>Harvest Credits</h2>
+      <p class="balance"><span id="balance">0</span> credits</p>
+      <ul id="ledger" class="list"></ul>
+    </section>
+  </div>
+</main>
+
+<script src="/app/cumulus-id.js" data-client="{{CID_CLIENT}}" data-issuer="{{CID_ISSUER}}" defer></script>
+<script src="/app/app.js" defer></script>
+</body>
+</html>
