@@ -6,6 +6,7 @@ import { conjureRoutesFromEnv, toWebRequest, sendWebResponse } from "./conjure/c
 import { openClawRoutesFromEnv } from "./openclaw/openclaw.mjs";
 import { searchRoutesFromEnv } from "./search/search.mjs";
 import { createCidVerifier, type CidProfile } from "./cid.ts";
+import { createWebApp } from "./web-app.ts";
 import { billingEnabled, createRevenueClient, planCard, returnNotice, startBuyerAccess, BUYER_PLAN, type RevenueClient } from "./billing.ts";
 
 const PLACES = new Set<PlaceClass>([
@@ -88,11 +89,14 @@ export function createHrvstServer(
   // @search: POST /v1/search { query } or { text: "@search ..." } — Infinitum Search, a web answer with
   // numbered sources, as ?owner=<CID>. Only the typed question goes out. Off until a search engine is set.
   const search = searchRoutesFromEnv(process.env, { prefix: "/v1/search" });
+  // The web app: GET / and /app/*, signed in with Cumulus ID in the browser.
+  const web = createWebApp();
   return createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     const parts = url.pathname.split("/").filter(Boolean);
     try {
       if (url.pathname === "/healthz") return json(res, 200, { ok: true, product: "hrvst" });
+      if (web(req.method ?? "GET", url.pathname, res)) return;
       if (parts[0] !== "v1") throw new HrvstError("not found", 404);
       const who = await caller(req, token, verifyCid);
       if (!who) throw new HrvstError("sign in with Cumulus ID, or send the service token", 401);

@@ -1,0 +1,63 @@
+:root {
+  color-scheme: light dark;
+  --bg: #fbfbf9;
+  --fg: #1b1b18;
+  --muted: #66665f;
+  --line: #d4d4cc;
+  --accent: #2f6b2f;
+  --error: #b3261e;
+  --chip: #ecece6;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141412;
+    --fg: #ecece6;
+    --muted: #a3a39a;
+    --line: #3a3a35;
+    --accent: #8fc48f;
+    --error: #f2b8b5;
+    --chip: #24241f;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.brand { font-weight: 700; letter-spacing: .04em; }
+main { max-width: 760px; margin: 0 auto; padding: 16px; }
+h1 { font-size: 24px; line-height: 1.25; margin: 8px 0 12px; }
+h2 { font-size: 17px; margin: 20px 0 8px; }
+.panel { padding-bottom: 16px; }
+.muted { color: var(--muted); }
+.status { min-height: 1.5em; margin: 0 0 8px; }
+.status.error { color: var(--error); }
+.tabs { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+.tabs button { border: 0; border-bottom: 2px solid transparent; background: none; color: var(--muted); padding: 8px 10px; min-height: 40px; font: inherit; cursor: pointer; }
+.tabs button[aria-current="page"] { color: var(--fg); border-bottom-color: var(--accent); }
+.form { display: grid; gap: 10px; }
+.row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+label { display: grid; gap: 4px; font-size: 14px; color: var(--muted); }
+input, select, textarea { font: inherit; color: var(--fg); background: transparent; border: 1px solid var(--line); padding: 6px 8px; width: 100%; min-height: 36px; }
+textarea { resize: vertical; }
+button { font: inherit; min-height: 36px; padding: 0 14px; border: 1px solid currentColor; background: transparent; color: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: .5; cursor: default; }
+.form > button { justify-self: start; }
+.list { list-style: none; padding: 0; margin: 0; }
+.item { border-top: 1px solid var(--line); padding: 10px 0; display: grid; gap: 6px; }
+.item:last-child { border-bottom: 1px solid var(--line); }
+.item p { margin: 0; overflow-wrap: anywhere; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px; color: var(--muted); }
+.chip { background: var(--chip); padding: 0 6px; }
+.actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.actions input, .actions select { width: auto; max-width: 160px; }
+.empty { color: var(--muted); padding: 8px 0; }
+.balance { font-size: 28px; margin: 4px 0 12px; }
+.delta-plus { color: var(--accent); }
+.delivery { border: 1px solid var(--line); padding: 12px; margin-top: 12px; overflow-wrap: anywhere; }
+.delivery code { font-size: 12px; }
+/* Cumulus ID button (the script's own style element is blocked by this page's CSP). */
+.cid-wrap { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cid-btn { display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border: 1px solid currentColor; background: transparent; color: inherit; font: inherit; font-size: 14px; cursor: pointer; white-space: nowrap; }
+.cid-btn:hover, .cid-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cid-who { font-size: 14px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cid-err { color: var(--error); font-size: 13px; flex-basis: 100%; }
