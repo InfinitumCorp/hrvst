@@ -34,7 +34,12 @@ async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> 
     chunks.push(chunk as Buffer);
   }
   if (!chunks.length) return {};
-  const parsed = JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  } catch {
+    throw new HrvstError("body is not valid JSON");
+  }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new HrvstError("body must be an object");
   return parsed as Record<string, unknown>;
 }

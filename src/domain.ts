@@ -67,6 +67,21 @@ export function privacyFilter(raw: string): { text: string; redactions: string[]
   return { text: text.replace(/\s+/g, " ").trim(), redactions };
 }
 
+/** Upper bounds that keep one request from bloating the store. */
+export const LIMITS = { id: 200, label: 120, title: 120, brief: 2000, credits: 1_000_000 } as const;
+
+function bounded(value: string, max: number, what: string): string {
+  const text = value.trim();
+  if (text.length > max) throw new HrvstError(`${what} is too long (at most ${max} characters)`);
+  return text;
+}
+
+function creditsIn(value: number, what: string): number {
+  if (!Number.isFinite(value) || value < 1) throw new HrvstError(`${what} must be at least 1 credit`);
+  if (value > LIMITS.credits) throw new HrvstError(`${what} cannot exceed ${LIMITS.credits} credits`);
+  return Math.round(value);
+}
+
 /** A person (actor) may only act on what they own. Services pass no actor. */
 function mustBe(actor: string | undefined, owner: string | undefined, what: string) {
   if (actor !== undefined && actor !== owner) throw new HrvstError(`only the ${what} can do that`, 403);
@@ -114,12 +129,13 @@ export class HrvstBackend {
     const owner = input.owner.trim();
     const note = input.note.trim();
     if (!owner || !note) throw new HrvstError("owner and note are required");
+    bounded(owner, LIMITS.id, "owner");
     if (note.length > 2000) throw new HrvstError("note is too long");
     const capture: Capture = {
       id: nid("cap"),
       owner,
       note,
-      placeLabel: input.placeLabel.trim() || "unspecified",
+      placeLabel: bounded(input.placeLabel, LIMITS.label, "placeLabel") || "unspecified",
       placeClass: input.placeClass,
       mediaKind: input.mediaKind ?? "glasses",
       capturedAt: iso(),
@@ -188,8 +204,7 @@ export class HrvstBackend {
       return packet;
     }
     if (priceCredits !== undefined) {
-      if (!Number.isFinite(priceCredits) || priceCredits < 1) throw new HrvstError("price must be at least 1 credit");
-      packet.priceCredits = Math.round(priceCredits);
+      packet.priceCredits = creditsIn(priceCredits, "price");
     }
     packet.status = "listed";
     return packet;
@@ -204,7 +219,10 @@ export class HrvstBackend {
   }): Mission {
     const buyer = input.buyer.trim();
     if (!buyer || !input.title.trim()) throw new HrvstError("buyer and title are required");
-    if (!Number.isFinite(input.rewardCredits) || input.rewardCredits < 1) throw new HrvstError("reward must be at least 1 credit");
+    bounded(buyer, LIMITS.id, "buyer");
+    const title = bounded(input.title, LIMITS.title, "title");
+    const brief = bounded(input.brief, LIMITS.brief, "brief");
+    creditsIn(input.rewardCredits, "reward");
     if (RESTRICTED.has(input.placeClass)) throw new HrvstError(`a mission cannot ask for ${input.placeClass}`);
     const reward = Math.round(input.rewardCredits);
     if ((this.balances.get(buyer) ?? 0) < reward) {
@@ -213,8 +231,8 @@ export class HrvstBackend {
     const mission: Mission = {
       id: nid("msn"),
       buyer,
-      title: input.title.trim(),
-      brief: input.brief.trim(),
+      title,
+      brief,
       rewardCredits: reward,
       placeClass: input.placeClass,
       status: "open",
@@ -246,6 +264,8 @@ export class HrvstBackend {
   claimMission(missionId: string, owner: string): Mission {
     const mission = this.requireMission(missionId);
     if (mission.status !== "open") throw new HrvstError("mission is not open", 409);
+    if (!owner.trim()) throw new HrvstError("owner is required");
+    bounded(owner, LIMITS.id, "owner");
     if (owner === mission.buyer) throw new HrvstError("buyer cannot claim their own mission");
     mission.status = "claimed";
     mission.claimer = owner;
@@ -321,6 +341,8 @@ export class HrvstBackend {
   license(packetId: string, licensee: string): Grant {
     const packet = this.requirePacket(packetId);
     if (packet.status !== "listed") throw new HrvstError("packet is not listed", 409);
+    if (!licensee.trim()) throw new HrvstError("licensee is required");
+    bounded(licensee, LIMITS.id, "licensee");
     if (licensee === packet.owner) throw new HrvstError("owner already holds the packet");
     if (this.grants.some((g) => g.packetId === packet.id && g.licensee === licensee)) {
       throw new HrvstError("licensee already holds this packet", 409);
@@ -401,6 +423,9 @@ export class HrvstBackend {
     const who = account.trim();
     if (!who || who === ESCROW || who === "platform") throw new HrvstError("a person or buyer account is required");
     if (!Number.isInteger(credits) || credits < 1) throw new HrvstError("credits must be a whole number of at least 1");
+    if (credits > LIMITS.credits) throw new HrvstError(`a top-up cannot exceed ${LIMITS.credits} credits`);
+    bounded(who, LIMITS.id, "account");
+    bounded(reason, LIMITS.title, "reason");
     if (!reason.trim()) throw new HrvstError("a reason is required");
     this.credit(who, credits, `top up: ${reason.trim()}`);
     return this.balance(who);
