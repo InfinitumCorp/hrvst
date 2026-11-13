@@ -61,8 +61,8 @@
   async function act(label, fn) {
     status(`${label}…`);
     try {
-      await fn();
-      status(`${label}: done.`);
+      const note = await fn();
+      status(typeof note === "string" ? note : `${label}: done.`);
     } catch (e) {
       status(`${label}: ${e.message}`, true);
       return;
@@ -240,6 +240,25 @@
       act("Post mission", async () => {
         await api("/v1/missions", { title: f.get("title"), brief: f.get("brief"), rewardCredits: Number(f.get("rewardCredits")), placeClass: f.get("placeClass") });
         ev.target.reset();
+      });
+    });
+
+    $("export").addEventListener("click", () => act("Download", async () => {
+      const data = await api("/v1/me/export");
+      const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+      const link = h("a", { href: url, download: "hrvst-export.json" });
+      document.body.append(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    }));
+
+    $("erase").addEventListener("click", () => {
+      const typed = prompt('This cannot be undone. Type "erase" to erase your HRVST data.');
+      if (typed !== "erase") return;
+      act("Erase", async () => {
+        const done = await api("/v1/me/erase", { confirm: "erase" });
+        return `Erased ${done.captures} captures and ${done.packets} packets; ${done.missionsCancelled} missions cancelled, ${done.missionsReleased} given back.`;
       });
     });
 

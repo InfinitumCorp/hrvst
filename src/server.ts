@@ -150,6 +150,21 @@ export function createHrvstServer(
         throw new HrvstError("not found", 404);
       }
 
+      // Your data: download everything HRVST holds about you, or erase it.
+      if (resource === "me" && id === "export" && !action && req.method === "GET") {
+        const owner = ownerFor(who, url.searchParams.get("owner") ?? undefined);
+        if (!owner) throw new HrvstError("owner is required");
+        res.setHeader("content-disposition", 'attachment; filename="hrvst-export.json"');
+        return json(res, 200, store.exportFor(owner));
+      }
+      if (resource === "me" && id === "erase" && !action && req.method === "POST") {
+        const body = await readBody(req);
+        if (body.confirm !== "erase") throw new HrvstError('send { "confirm": "erase" } to erase your data');
+        const owner = ownerFor(who, body.owner);
+        if (!owner) throw new HrvstError("owner is required");
+        return saved(200, store.eraseAccount(owner));
+      }
+
       // A service sees the whole board; a person sees their own silo, credits and grants, and open missions.
       if (resource === "board" && req.method === "GET") return json(res, 200, actor ? store.snapshotFor(actor) : store.snapshot());
 

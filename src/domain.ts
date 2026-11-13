@@ -178,9 +178,7 @@ export class HrvstBackend {
     mustBe(actor, packet.owner, "owner");
     if (packet.status === "retired") throw new HrvstError("packet is retired", 409);
     if (action === "delete") {
-      packet.status = "retired";
-      const capture = this.captures.get(packet.captureId);
-      if (capture) capture.status = "deleted";
+      this.erasePacket(packet);
       return packet;
     }
     if (action === "keep") {
@@ -431,6 +429,63 @@ export class HrvstBackend {
       signals: this.signals.filter((s) => mine.has(s.packetId)),
       balances: { [cid]: this.balance(cid) },
     };
+  }
+
+  /**
+   * Deleting erases the words, not the proof. The capture's note is wiped. The packet's observation is
+   * wiped too, unless someone already holds a licence to it: they paid for that copy, so it stays for them.
+   * Proof hashes stay so the chain still verifies.
+   */
+  private erasePacket(packet: Packet) {
+    packet.status = "retired";
+    if (!this.grants.some((g) => g.packetId === packet.id)) packet.observation = "";
+    const capture = this.captures.get(packet.captureId);
+    if (capture) this.eraseCapture(capture);
+  }
+
+  private eraseCapture(capture: Capture) {
+    capture.status = "deleted";
+    capture.note = "";
+    capture.placeLabel = "deleted";
+    delete capture.excludedReason;
+  }
+
+  /** Everything HRVST holds about one person, for them to download. */
+  exportFor(cid: string): Board & { owner: string; exportedAt: string } {
+    return { owner: cid, exportedAt: iso(), ...this.snapshotFor(cid) };
+  }
+
+  /**
+   * Erase a person's data: every capture and packet (as delete does), every open mission they posted
+   * (reward refunded), and every mission they claimed but did not finish (given back). Credits, licences
+   * already sold and the ledger stay: they are other people's purchases and the money record.
+   */
+  eraseAccount(cid: string): { captures: number; packets: number; missionsCancelled: number; missionsReleased: number } {
+    let captures = 0;
+    let packets = 0;
+    let missionsCancelled = 0;
+    let missionsReleased = 0;
+    for (const packet of this.packets.values()) {
+      const licensed = this.grants.some((g) => g.packetId === packet.id);
+      if (packet.owner !== cid || (packet.status === "retired" && (!packet.observation || licensed))) continue;
+      this.erasePacket(packet);
+      packets++;
+    }
+    for (const capture of this.captures.values()) {
+      if (capture.owner !== cid || (capture.status === "deleted" && !capture.note)) continue;
+      this.eraseCapture(capture);
+      captures++;
+    }
+    for (const mission of this.missions.values()) {
+      if (mission.buyer === cid && mission.status === "open") {
+        this.cancelMission(mission.id);
+        missionsCancelled++;
+      } else if (mission.claimer === cid && mission.status === "claimed") {
+        this.releaseMission(mission.id);
+        missionsReleased++;
+      }
+    }
+    return { captures, packets, missionsCancelled, missionsReleased };
   }
 
   /** Everything needed to rebuild the store, including the proof-chain tip. */
