@@ -51,6 +51,14 @@ The plans are [HRVST] Free, Pro Contributor (`hrvst_pro`, self-serve) and Buyer 
 
 The page loads only its own files (`src/app/`) under `script-src 'self'; style-src 'self'; connect-src 'self'`, builds every element with `textContent`, and keeps the token in the tab's `sessionStorage`. No analytics: HRVST is excluded from Amplitude.
 
+## Your data
+
+- **Delete a packet** (`decide` with `delete`): the capture's note and the packet's observation are wiped; proof hashes stay so the chain still verifies. If someone already bought a licence, their copy stays with them.
+- **Download** (`GET /v1/me/export`): everything HRVST holds about you as JSON.
+- **Erase** (`POST /v1/me/erase` with `{ "confirm": "erase" }`): wipes all your captures and packets, cancels the missions you posted that nobody has claimed (reward refunded), and gives back missions you claimed. Licences already sold, your credit balance and the ledger stay.
+
+A person can only export or erase their own data. Both are in the web app under Credits.
+
 ## Storage
 
 Set `HRVST_DATA_FILE` (for example `data/hrvst.json`) to keep captures, packets, missions, grants, the credit ledger and the proof-chain tip across restarts. Each successful change is written before the reply goes out, to a temporary file that is then renamed over the old one, with owner-only permissions. A new data file starts empty; set `HRVST_SEED=1` once to load the demo data. Without `HRVST_DATA_FILE` everything lives in memory with the demo data, and a restart loses it. The file holds personal data, so keep it out of git (`data/` is ignored) and on an encrypted disk. One process per data file.
