@@ -59,6 +59,10 @@ The page loads only its own files (`src/app/`) under `script-src 'self'; style-s
 
 A person can only export or erase their own data. Both are in the web app under Credits.
 
+## Limits and errors
+
+Each signed-in person may make 300 reads and 60 writes a minute (`HRVST_RATE_READS`, `HRVST_RATE_WRITES`; `0` turns a limit off). Over the limit the reply is `429` with `Retry-After: 60`. Services using `HRVST_API_TOKEN` are not limited. API replies carry `Cache-Control: no-store` and `X-Content-Type-Options: nosniff`. An unexpected failure answers `500 {"error":"internal error"}`; the detail goes to the server log only. On `SIGTERM` or `SIGINT` the server stops taking requests and writes the data file one last time. `GET /healthz` says whether data is kept in a `file` or only in `memory`.
+
 ## Storage
 
 Set `HRVST_DATA_FILE` (for example `data/hrvst.json`) to keep captures, packets, missions, grants, the credit ledger and the proof-chain tip across restarts. Each successful change is written before the reply goes out, to a temporary file that is then renamed over the old one, with owner-only permissions. A new data file starts empty; set `HRVST_SEED=1` once to load the demo data. Without `HRVST_DATA_FILE` everything lives in memory with the demo data, and a restart loses it. The file holds personal data, so keep it out of git (`data/` is ignored) and on an encrypted disk. One process per data file.

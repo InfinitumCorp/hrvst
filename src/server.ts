@@ -21,9 +21,43 @@ const PLACES = new Set<PlaceClass>([
   "home_interior",
 ]);
 
+/** API replies hold personal data: never cached, never sniffed, never framed. */
+const API_HEADERS = {
+  "content-type": "application/json; charset=utf-8",
+  "cache-control": "no-store",
+  "x-content-type-options": "nosniff",
+  "referrer-policy": "no-referrer",
+  "x-frame-options": "DENY",
+};
+
 function json(res: ServerResponse, status: number, data: unknown) {
-  res.writeHead(status, { "content-type": "application/json" });
+  res.writeHead(status, API_HEADERS);
   res.end(JSON.stringify(data));
+}
+
+/**
+ * Per-person request budget per minute (services are not limited). Writes have a smaller budget than reads.
+ * HRVST_RATE_READS / HRVST_RATE_WRITES override the defaults; 0 turns a limit off.
+ */
+export function createRateLimiter(reads = 300, writes = 60, now = () => Date.now()) {
+  const windows = new Map<string, { start: number; reads: number; writes: number }>();
+  return function allow(key: string, write: boolean): boolean {
+    const t = now();
+    let w = windows.get(key);
+    if (!w || t - w.start >= 60_000) {
+      w = { start: t, reads: 0, writes: 0 };
+      windows.set(key, w);
+      if (windows.size > 50_000) for (const [k, v] of windows) if (t - v.start >= 60_000) windows.delete(k);
+    }
+    if (write) {
+      if (writes > 0 && w.writes >= writes) return false;
+      w.writes++;
+    } else {
+      if (reads > 0 && w.reads >= reads) return false;
+      w.reads++;
+    }
+    return true;
+  };
 }
 
 async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
@@ -96,17 +130,25 @@ export function createHrvstServer(
   const search = searchRoutesFromEnv(process.env, { prefix: "/v1/search" });
   // The web app: GET / and /app/*, signed in with Cumulus ID in the browser.
   const web = createWebApp();
+  const allow = createRateLimiter(
+    Number(process.env.HRVST_RATE_READS ?? 300),
+    Number(process.env.HRVST_RATE_WRITES ?? 60),
+  );
   return createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     const parts = url.pathname.split("/").filter(Boolean);
     try {
-      if (url.pathname === "/healthz") return json(res, 200, { ok: true, product: "hrvst" });
+      if (url.pathname === "/healthz") return json(res, 200, { ok: true, product: "hrvst", storage: store.file ? "file" : "memory" });
       if (web(req.method ?? "GET", url.pathname, res)) return;
       if (parts[0] !== "v1") throw new HrvstError("not found", 404);
       const who = await caller(req, token, verifyCid);
       if (!who) throw new HrvstError("sign in with Cumulus ID, or send the service token", 401);
       const [, resource, id, action] = parts;
       const actor = actorOf(who);
+      if (actor && !allow(actor, req.method !== "GET" && req.method !== "HEAD")) {
+        res.setHeader("retry-after", "60");
+        throw new HrvstError("too many requests; try again in a minute", 429);
+      }
       // Every successful change is written to HRVST_DATA_FILE (when set) before the reply goes out.
       const saved = (status: number, data: unknown) => {
         store.save();
@@ -258,8 +300,10 @@ export function createHrvstServer(
 
       throw new HrvstError("not found", 404);
     } catch (error) {
-      const status = error instanceof HrvstError ? error.status : 500;
-      json(res, status, { error: error instanceof Error ? error.message : "failed" });
+      if (error instanceof HrvstError) return json(res, error.status, { error: error.message });
+      // Never send internal details (paths, stack traces) to the caller.
+      console.error(`HRVST ${req.method} ${url.pathname} failed:`, error);
+      json(res, 500, { error: "internal error" });
     }
   });
 }
@@ -267,7 +311,22 @@ export function createHrvstServer(
 const self = process.argv[1] ?? "";
 if (self.endsWith("server.ts") || self.endsWith("server.js")) {
   const port = Number(process.env.PORT ?? 7340);
-  createHrvstServer().listen(port, "0.0.0.0", () => {
+  const server = createHrvstServer();
+  server.listen(port, "0.0.0.0", () => {
     console.log(`HRVST listening on ${port}`);
   });
+  // Stop taking requests, write the store one last time, then exit.
+  const stop = (signal: string) => {
+    console.log(`HRVST stopping (${signal})`);
+    server.close();
+    try {
+      getBackend().save();
+    } catch (error) {
+      console.error("HRVST final save failed:", error);
+      process.exitCode = 1;
+    }
+    setTimeout(() => process.exit(), 2_000).unref();
+  };
+  process.once("SIGTERM", () => stop("SIGTERM"));
+  process.once("SIGINT", () => stop("SIGINT"));
 }
