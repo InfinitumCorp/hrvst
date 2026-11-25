@@ -57,6 +57,8 @@ export interface Mission {
   claimer?: string;
   claimedAt?: string;
   packetId?: string;
+  /** After this time an open or claimed (not yet submitted) mission is cancelled and the reward refunded. */
+  deadline?: string;
   /** Packets the buyer turned down for this mission. */
   rejectedPackets?: string[];
   createdAt: string;

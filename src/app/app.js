@@ -161,7 +161,7 @@
       return h("li", { class: "item" },
         h("p", {}, m.title),
         m.brief ? h("p", { class: "muted" }, m.brief) : null,
-        h("div", { class: "meta" }, chip(m.status), chip(m.placeClass), chip(`${m.rewardCredits} credits`), mineAsBuyer ? chip("you posted") : null, mineAsClaimer ? chip("you claimed") : null),
+        h("div", { class: "meta" }, chip(m.status), chip(m.placeClass), chip(`${m.rewardCredits} credits`), m.deadline ? chip(`due ${when(m.deadline)}`) : null, mineAsBuyer ? chip("you posted") : null, mineAsClaimer ? chip("you claimed") : null),
         actions.length ? h("div", { class: "actions" }, actions) : null,
       );
     }), "No missions right now.");
@@ -238,7 +238,14 @@
       ev.preventDefault();
       const f = new FormData(ev.target);
       act("Post mission", async () => {
-        await api("/v1/missions", { title: f.get("title"), brief: f.get("brief"), rewardCredits: Number(f.get("rewardCredits")), placeClass: f.get("placeClass") });
+        const days = f.get("deadlineDays");
+        await api("/v1/missions", {
+          title: f.get("title"),
+          brief: f.get("brief"),
+          rewardCredits: Number(f.get("rewardCredits")),
+          placeClass: f.get("placeClass"),
+          ...(days ? { deadlineDays: Number(days) } : {}),
+        });
         ev.target.reset();
       });
     });

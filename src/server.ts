@@ -130,6 +130,16 @@ export function createHrvstServer(
   const search = searchRoutesFromEnv(process.env, { prefix: "/v1/search" });
   // The web app: GET / and /app/*, signed in with Cumulus ID in the browser.
   const web = createWebApp();
+  // Once a minute: retire expired packets and lapse overdue missions; save only when something changed.
+  const sweeper = setInterval(() => {
+    try {
+      const done = store.sweep();
+      if (done.packetsRetired || done.missionsLapsed) store.save();
+    } catch (error) {
+      console.error("HRVST sweep failed:", error);
+    }
+  }, 60_000);
+  sweeper.unref();
   const allow = createRateLimiter(
     Number(process.env.HRVST_RATE_READS ?? 300),
     Number(process.env.HRVST_RATE_WRITES ?? 60),
@@ -269,6 +279,7 @@ export function createHrvstServer(
           brief: String(body.brief ?? ""),
           rewardCredits: Number(body.rewardCredits),
           placeClass: place(body.placeClass),
+          deadlineDays: body.deadlineDays === undefined || body.deadlineDays === null || body.deadlineDays === "" ? undefined : Number(body.deadlineDays),
         }));
       }
 

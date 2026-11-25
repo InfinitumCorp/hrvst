@@ -87,6 +87,13 @@ function mustBe(actor: string | undefined, owner: string | undefined, what: stri
   if (actor !== undefined && actor !== owner) throw new HrvstError(`only the ${what} can do that`, 403);
 }
 
+/** Refuse work on a mission whose deadline has passed (the sweep will cancel and refund it). */
+function lapsed(mission: Mission) {
+  if (mission.deadline && new Date(mission.deadline).getTime() < Date.now()) {
+    throw new HrvstError("the mission's deadline has passed", 409);
+  }
+}
+
 function qualityOf(text: string, placeClass: PlaceClass): number {
   const words = text.split(/\s+/).filter(Boolean).length;
   let score = Math.min(0.95, 0.35 + words * 0.04);
@@ -214,8 +221,13 @@ export class HrvstBackend {
     brief: string;
     rewardCredits: number;
     placeClass: PlaceClass;
+    /** Optional: whole days (1 to 90) until the mission lapses. */
+    deadlineDays?: number;
   }): Mission {
     const buyer = input.buyer.trim();
+    if (input.deadlineDays !== undefined && (!Number.isInteger(input.deadlineDays) || input.deadlineDays < 1 || input.deadlineDays > 90)) {
+      throw new HrvstError("deadline must be a whole number of days from 1 to 90");
+    }
     if (!buyer || !input.title.trim()) throw new HrvstError("buyer and title are required");
     bounded(buyer, LIMITS.id, "buyer");
     const title = bounded(input.title, LIMITS.title, "title");
@@ -236,6 +248,7 @@ export class HrvstBackend {
       status: "open",
       createdAt: iso(),
       escrowed: true,
+      ...(input.deadlineDays ? { deadline: iso(Date.now() + input.deadlineDays * 24 * 60 * 60 * 1000) } : {}),
     };
     this.credit(buyer, -reward, `escrow ${mission.id}`);
     this.credit(ESCROW, reward, `escrow ${mission.id}`);
@@ -262,6 +275,7 @@ export class HrvstBackend {
   claimMission(missionId: string, owner: string): Mission {
     const mission = this.requireMission(missionId);
     if (mission.status !== "open") throw new HrvstError("mission is not open", 409);
+    lapsed(mission);
     if (!owner.trim()) throw new HrvstError("owner is required");
     bounded(owner, LIMITS.id, "owner");
     if (owner === mission.buyer) throw new HrvstError("buyer cannot claim their own mission");
@@ -300,6 +314,7 @@ export class HrvstBackend {
     const mission = this.requireMission(missionId);
     mustBe(actor, mission.claimer, "claimer");
     if (mission.status !== "claimed" || !mission.claimer) throw new HrvstError("mission is not claimed", 409);
+    lapsed(mission);
     const packet = this.requirePacket(packetId);
     if (packet.owner !== mission.claimer) throw new HrvstError("packet is not owned by the claimer");
     if (mission.rejectedPackets?.includes(packet.id)) throw new HrvstError("the buyer already turned this packet down", 409);
@@ -367,6 +382,33 @@ export class HrvstBackend {
     };
     this.grants.push(grant);
     return grant;
+  }
+
+  /**
+   * Tidy up what time has run out on: a packet past its expiry is retired (its owner keeps the text,
+   * but it can no longer be sold or used for a mission), and an open or claimed mission past its deadline
+   * is cancelled with the reward refunded. A submitted mission waits for the buyer. Returns what changed.
+   */
+  sweep(now = Date.now()): { packetsRetired: number; missionsLapsed: number } {
+    let packetsRetired = 0;
+    let missionsLapsed = 0;
+    for (const packet of this.packets.values()) {
+      if (packet.status !== "retired" && new Date(packet.expiresAt).getTime() < now) {
+        packet.status = "retired";
+        packetsRetired++;
+      }
+    }
+    for (const mission of this.missions.values()) {
+      if (!mission.deadline || new Date(mission.deadline).getTime() >= now) continue;
+      if (mission.status !== "open" && mission.status !== "claimed") continue;
+      if (mission.escrowed) {
+        this.credit(ESCROW, -mission.rewardCredits, `lapsed ${mission.id}`);
+        this.credit(mission.buyer, mission.rewardCredits, `lapsed ${mission.id}`);
+      }
+      mission.status = "cancelled";
+      missionsLapsed++;
+    }
+    return { packetsRetired, missionsLapsed };
   }
 
   /** Listed, unexpired packets as a buyer sees them before paying. */
