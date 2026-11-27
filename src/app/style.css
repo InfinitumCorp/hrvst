@@ -61,3 +61,6 @@ button:disabled { opacity: .5; cursor: default; }
 .cid-btn:hover, .cid-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .cid-who { font-size: 14px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cid-err { color: var(--error); font-size: 13px; flex-basis: 100%; }
+.top-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lang { font: inherit; font-size: 14px; color: var(--muted); background: none; border: 1px solid var(--line); padding: 4px 10px; min-height: 32px; cursor: pointer; }
+.lang:hover { color: var(--fg); }

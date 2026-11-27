@@ -6,6 +6,7 @@ const DIR = new URL("./app/", import.meta.url);
 const ASSETS: Record<string, string> = {
   "app.js": "text/javascript; charset=utf-8",
   "cumulus-id.js": "text/javascript; charset=utf-8",
+  "i18n.js": "text/javascript; charset=utf-8",
   "style.css": "text/css; charset=utf-8",
 };
 

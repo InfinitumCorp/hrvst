@@ -9,7 +9,10 @@
 <body>
 <header class="top">
   <span class="brand">[HRVST]</span>
-  <span class="who" data-cumulus-id></span>
+  <span class="top-right">
+    <button type="button" id="lang-switch" class="lang" hidden></button>
+    <span class="who" data-cumulus-id></span>
+  </span>
 </header>
 
 <main id="main">
@@ -118,6 +121,7 @@
   </div>
 </main>
 
+<script src="/app/i18n.js" defer></script>
 <script src="/app/cumulus-id.js" data-client="{{CID_CLIENT}}" data-issuer="{{CID_ISSUER}}" defer></script>
 <script src="/app/app.js" defer></script>
 </body>
