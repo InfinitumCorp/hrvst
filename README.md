@@ -27,6 +27,7 @@ A kept or listed packet can emit a `fault` signal for :\ARCHITECT\. The signal i
 | POST | `/v1/missions` | buyer posts a rewarded request; the reward is held in escrow; restricted places are refused |
 | POST | `/v1/missions/:id/claim` | `{ owner }` |
 | POST | `/v1/missions/:id/submit` | `{ packetId }` |
+| GET | `/v1/missions/:id/submission` | the buyer previews a submission before paying: place, quality, uses, age; the observation comes with the licence that accepting creates |
 | POST | `/v1/missions/:id/accept` | pays the claimer from escrow |
 | POST | `/v1/missions/:id/cancel` | buyer withdraws an open mission, or one claimed over 7 days ago with no submission; the reward comes back |
 | POST | `/v1/missions/:id/release` | claimer gives the mission back |

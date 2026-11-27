@@ -159,7 +159,13 @@
         );
       }
       if (mineAsBuyer && m.status === "submitted") {
+        const preview = h("div", { class: "meta" }, h("span", { class: "muted" }, t("Loading the submission…")));
+        api(`/v1/missions/${m.id}/submission`).then((s) => preview.replaceChildren(
+          h("span", {}, t("Submitted:")), chip(s.placeLabel), chip(t("quality {q}", { q: s.quality })), chip(s.permittedUses.join(", ")), when(s.createdAt),
+          s.rejectedBefore ? chip(t("you turned down {n} before", { n: s.rejectedBefore })) : null,
+        )).catch((e) => preview.replaceChildren(h("span", { class: "muted" }, e.message)));
         actions.push(
+          preview,
           h("button", { type: "button", onclick: () => confirm(t("Accept and pay {n} credits?", { n: m.rewardCredits })) && act(t("Accept"), () => api(`/v1/missions/${m.id}/accept`, {})) }, t("Accept and pay")),
           h("button", { type: "button", onclick: () => act(t("Reject"), () => api(`/v1/missions/${m.id}/reject`, {})) }, t("Reject")),
         );

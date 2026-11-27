@@ -16,6 +16,7 @@ import {
   type Packet,
   type PlaceClass,
   type ProofCheck,
+  type SubmissionPreview,
 } from "./types.ts";
 
 export { CONTRIBUTOR_SHARE_BPS, PLATFORM_FEE_BPS };
@@ -339,6 +340,25 @@ export class HrvstBackend {
     mission.status = "submitted";
     mission.packetId = packet.id;
     return mission;
+  }
+
+  /**
+   * The submission as the buyer sees it before deciding: place, quality, uses and when it was made.
+   * The observation itself comes only with the licence that accepting creates.
+   */
+  submissionPreview(missionId: string, actor?: string): SubmissionPreview {
+    const mission = this.requireMission(missionId);
+    mustBe(actor, mission.buyer, "buyer");
+    if (mission.status !== "submitted" || !mission.packetId) throw new HrvstError("mission has no submission", 409);
+    const packet = this.requirePacket(mission.packetId);
+    return {
+      missionId: mission.id,
+      placeLabel: packet.placeLabel,
+      quality: packet.quality,
+      permittedUses: [...packet.permittedUses],
+      createdAt: packet.createdAt,
+      rejectedBefore: mission.rejectedPackets?.length ?? 0,
+    };
   }
 
   acceptMission(missionId: string, actor?: string): Mission {

@@ -306,6 +306,8 @@ export function createHrvstServer(
         }));
       }
 
+      if (resource === "missions" && id && action === "submission" && req.method === "GET") return json(res, 200, store.submissionPreview(id, actor));
+
       if (resource === "missions" && id && req.method === "POST") {
         const body = await readBody(req);
         if (action === "claim") return saved(200, store.claimMission(id, ownerFor(who, body.owner)));
