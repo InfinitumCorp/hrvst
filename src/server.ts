@@ -296,26 +296,26 @@ export function createHrvstServer(
 
       if (resource === "missions" && req.method === "POST" && !id) {
         const body = await readBody(req);
-        return saved(201, store.postMission({
+        return saved(201, store.missionFor(store.postMission({
           buyer: ownerFor(who, body.buyer),
           title: String(body.title ?? ""),
           brief: String(body.brief ?? ""),
           rewardCredits: Number(body.rewardCredits),
           placeClass: place(body.placeClass),
           deadlineDays: body.deadlineDays === undefined || body.deadlineDays === null || body.deadlineDays === "" ? undefined : Number(body.deadlineDays),
-        }));
+        }), actor));
       }
 
       if (resource === "missions" && id && action === "submission" && req.method === "GET") return json(res, 200, store.submissionPreview(id, actor));
 
       if (resource === "missions" && id && req.method === "POST") {
         const body = await readBody(req);
-        if (action === "claim") return saved(200, store.claimMission(id, ownerFor(who, body.owner)));
-        if (action === "submit") return saved(200, store.submitMission(id, String(body.packetId ?? ""), actor));
-        if (action === "accept") return saved(200, store.acceptMission(id, actor));
-        if (action === "cancel") return saved(200, store.cancelMission(id, actor));
-        if (action === "release") return saved(200, store.releaseMission(id, actor));
-        if (action === "reject") return saved(200, store.rejectMission(id, actor));
+        if (action === "claim") return saved(200, store.missionFor(store.claimMission(id, ownerFor(who, body.owner)), actor));
+        if (action === "submit") return saved(200, store.missionFor(store.submitMission(id, String(body.packetId ?? ""), actor), actor));
+        if (action === "accept") return saved(200, store.missionFor(store.acceptMission(id, actor), actor));
+        if (action === "cancel") return saved(200, store.missionFor(store.cancelMission(id, actor), actor));
+        if (action === "release") return saved(200, store.missionFor(store.releaseMission(id, actor), actor));
+        if (action === "reject") return saved(200, store.missionFor(store.rejectMission(id, actor), actor));
       }
 
       // The Architect bridge marks a fault as handed over, with Architect's run or score id.

@@ -53,6 +53,15 @@ test("GET /v1/missions/:id/submission answers only the buyer", async () => {
     assert.equal(ok.status, 200);
     assert.equal((await ok.json()).placeLabel, "North crossing");
     assert.equal((await get("t-field")).status, 403);
+
+    // Replies to mission actions name nobody else either.
+    const other = getBackend().postMission({ buyer: "cid:buyer", title: "Benches", brief: "", rewardCredits: 10, placeClass: "street" });
+    const claim = await fetch(`${base}/v1/missions/${other.id}/claim`, { method: "POST", headers: { authorization: "Bearer t-field", "content-type": "application/json" }, body: "{}" });
+    assert.equal(claim.status, 200);
+    const claimed = await claim.json();
+    assert.deepEqual([claimed.buyer, claimed.claimer], ["anonymous", "cid:field"]);
+    const svc = await fetch(`${base}/v1/missions/${other.id}/release`, { method: "POST", headers: { authorization: "Bearer svc", "content-type": "application/json" }, body: "{}" });
+    assert.equal((await svc.json()).buyer, "cid:buyer", "a service still sees everything");
   } finally {
     await new Promise((r) => server.close(r));
   }
