@@ -140,7 +140,7 @@
     "Nothing bought yet.": "Пока ничего не куплено.",
     "No credit movements yet.": "Движений по кредитам пока нет.",
     "sold {count}×, earned {n}": "продано {count}×, заработано {n}",
-    "Earned {n} credits from {count} sales of your packets.": "Заработано {n} кредитов на {count} продажах ваших пакетов.",
+    "Sales of your packets: {count}. Earned: {n} credits.": "Продаж ваших пакетов: {count}. Заработано кредитов: {n}.",
     "None of your packets has sold yet.": "Ни один из ваших пакетов ещё не продан.",
     "Proof of perspective": "Доказательство наблюдения",
     "Proof checked: it matches the observation and links into the chain.": "Доказательство проверено: оно совпадает с наблюдением и встроено в цепочку.",

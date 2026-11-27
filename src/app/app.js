@@ -229,7 +229,7 @@
     const sales = [...salesByPacket().values()];
     const earned = sales.reduce((n, s) => n + s.earned, 0);
     const count = sales.reduce((n, s) => n + s.count, 0);
-    $("earned").textContent = count ? t("Earned {n} credits from {count} sales of your packets.", { n: earned, count }) : t("None of your packets has sold yet.");
+    $("earned").textContent = count ? t("Sales of your packets: {count}. Earned: {n} credits.", { n: earned, count }) : t("None of your packets has sold yet.");
     fill($("ledger"), board.ledger.slice().reverse().slice(0, 50).map((e) => h("li", { class: "item" },
       h("div", { class: "meta" }, h("span", { class: e.delta > 0 ? "delta-plus" : "" }, `${e.delta > 0 ? "+" : ""}${e.delta}`), e.reason, when(e.at)),
     )), t("No credit movements yet."));
