@@ -67,8 +67,9 @@
         <div class="row">
           <label>Reward (credits) <input name="rewardCredits" type="number" min="1" max="1000000" step="1" required value="50"></label>
           <label>Kind of place <select name="placeClass" id="mission-place"></select></label>
+          <label>Deadline in days (optional) <input name="deadlineDays" type="number" min="1" max="90" step="1" placeholder="none"></label>
         </div>
-        <p class="muted">The reward is held from your credits until you accept a submission or cancel.</p>
+        <p class="muted">The reward is held from your credits until you accept a submission or cancel. With a deadline, a mission nobody has submitted to by then is cancelled and the reward comes back.</p>
         <button type="submit">Post mission</button>
       </form>
       <h2>Missions</h2>
