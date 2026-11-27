@@ -64,3 +64,5 @@ button:disabled { opacity: .5; cursor: default; }
 .top-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .lang { font: inherit; font-size: 14px; color: var(--muted); background: none; border: 1px solid var(--line); padding: 4px 10px; min-height: 32px; cursor: pointer; }
 .lang:hover { color: var(--fg); }
+.proof-check { color: var(--accent); }
+.proof-check.broken { color: var(--error); }

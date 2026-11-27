@@ -249,6 +249,7 @@ export function createHrvstServer(
 
       // The market: listed packets without owner or observation. Licensees collect at /v1/grants/:id.
       if (resource === "market" && req.method === "GET" && !id) return json(res, 200, store.market(marketFilter(url.searchParams)));
+      if (resource === "proof" && !id && req.method === "GET") return json(res, 200, store.verifyChain());
       if (resource === "grants" && id && !action && req.method === "GET") return json(res, 200, store.delivery(id, actor));
 
       // FIRM Suite: FIRM, FIRM Wallet, Firmament Network and $HRVST; with ?owner=, that CID's credits.

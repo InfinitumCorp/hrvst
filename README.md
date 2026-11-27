@@ -21,7 +21,8 @@ A kept or listed packet can emit a `fault` signal for :\ARCHITECT\. The signal i
 | POST | `/v1/packets/:id/decide` | `{ action: keep|list|delete, priceCredits? }` |
 | GET | `/v1/market` | listed packets: place, quality, uses, price; no owner, no observation. Filters: `q` (place text), `minQuality` (0 to 1), `maxPrice`, `use`; `sort` = `newest`, `cheapest` or `quality` |
 | POST | `/v1/packets/:id/license` | `{ licensee }` |
-| GET | `/v1/grants/:id` | the licensee collects the observation and its proof; the contributor stays anonymous |
+| GET | `/v1/grants/:id` | the licensee collects the observation and its proof, with `check`: `verified`, `linked` or `broken`; the contributor stays anonymous |
+| GET | `/v1/proof` | walk the proof chain: `{ ok, packets, sealed, tip, brokenAt?, reason? }` |
 | POST | `/v1/packets/:id/signal` | queue an Architect fault |
 | POST | `/v1/missions` | buyer posts a rewarded request; the reward is held in escrow; restricted places are refused |
 | POST | `/v1/missions/:id/claim` | `{ owner }` |
@@ -68,6 +69,15 @@ A person can only export or erase their own data. Both are in the web app under 
 ## Limits and errors
 
 Each signed-in person may make 300 reads and 60 writes a minute (`HRVST_RATE_READS`, `HRVST_RATE_WRITES`; `0` turns a limit off). Over the limit the reply is `429` with `Retry-After: 60`. Services using `HRVST_API_TOKEN` are not limited. API replies carry `Cache-Control: no-store` and `X-Content-Type-Options: nosniff`. An unexpected failure answers `500 {"error":"internal error"}`; the detail goes to the server log only. On `SIGTERM` or `SIGINT` the server stops taking requests and writes the data file one last time. `GET /healthz` says whether data is kept in a `file` or only in `memory`.
+
+## Proof chain
+
+Each packet's proof is a SHA-256 over the previous packet's proof, the capture's owner, time, raw digest and filtered text, so packets form one chain. `GET /v1/proof` walks it. Every packet must point at the proof before it, the last proof must be the stored tip, and wherever the capture still holds its text, the proof is recomputed and the packet's observation must match. A buyer opening a purchase sees the result:
+- `verified`: recomputed and linked.
+- `linked`: the contributor erased the original, so only the link can be checked.
+- `broken`: the chain does not hold.
+
+On start, a data file whose chain does not hold is logged as a warning.
 
 ## Storage
 

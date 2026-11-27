@@ -140,6 +140,11 @@
     "Nothing bought yet.": "Пока ничего не куплено.",
     "No credit movements yet.": "Движений по кредитам пока нет.",
     "Proof of perspective": "Доказательство наблюдения",
+    "Proof checked: it matches the observation and links into the chain.": "Доказательство проверено: оно совпадает с наблюдением и встроено в цепочку.",
+    "Proof links into the chain. The contributor erased the original, so the text itself can no longer be rechecked.":
+      "Доказательство встроено в цепочку. Автор стёр оригинал, поэтому сам текст перепроверить уже нельзя.",
+    "Proof check failed: the chain does not hold. Contact HRVST before relying on this data.":
+      "Проверка доказательства не пройдена: цепочка нарушена. Свяжитесь с HRVST, прежде чем полагаться на эти данные.",
     "captured {when}": "зафиксировано {when}",
     "Download": "Скачивание",
     "Erase": "Стирание",

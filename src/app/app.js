@@ -188,13 +188,19 @@
   async function openDelivery(grantId) {
     const box = $("delivery");
     try {
-      const { grant, packet } = await api(`/v1/grants/${grantId}`);
+      const { grant, packet, check } = await api(`/v1/grants/${grantId}`);
+      const badge = {
+        verified: t("Proof checked: it matches the observation and links into the chain."),
+        linked: t("Proof links into the chain. The contributor erased the original, so the text itself can no longer be rechecked."),
+        broken: t("Proof check failed: the chain does not hold. Contact HRVST before relying on this data."),
+      }[check] || "";
       box.replaceChildren(
         h("h3", {}, packet.placeLabel),
         h("p", {}, packet.observation),
         h("div", { class: "meta" }, chip(t("quality {q}", { q: packet.quality })), chip(grant.terms), t("captured {when}", { when: when(packet.createdAt) })),
         h("p", { class: "muted" }, t("Proof of perspective")),
         h("code", {}, packet.proof),
+        badge ? h("p", { class: check === "broken" ? "proof-check broken" : "proof-check" }, badge) : null,
       );
       box.hidden = false;
     } catch (e) {
