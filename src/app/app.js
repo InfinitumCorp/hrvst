@@ -92,12 +92,14 @@
       );
     }), t("No captures yet."));
 
+    const sales = salesByPacket();
     fill($("packets"), board.packets.slice().reverse().map((p) => {
+      const sold = sales.get(p.id);
       const price = h("input", { type: "number", min: 1, max: 1000000, step: 1, value: p.priceCredits, "aria-label": t("Price in credits") });
       const live = p.status !== "retired";
       return h("li", { class: "item" },
         h("p", {}, p.observation),
-        h("div", { class: "meta" }, chip(t(p.status)), chip(p.placeLabel), chip(t("quality {q}", { q: p.quality })), chip(t("{n} credits", { n: p.priceCredits })), chip(p.permittedUses.join(", "))),
+        h("div", { class: "meta" }, chip(t(p.status)), chip(p.placeLabel), chip(t("quality {q}", { q: p.quality })), chip(t("{n} credits", { n: p.priceCredits })), chip(p.permittedUses.join(", ")), sold ? chip(t("sold {count}×, earned {n}", { count: sold.count, n: sold.earned })) : null),
         live ? h("div", { class: "actions" },
           p.status !== "private" ? h("button", { type: "button", onclick: () => act(t("Keep"), () => api(`/v1/packets/${p.id}/decide`, { action: "keep" })) }, t("Keep private")) : null,
           price,
@@ -208,8 +210,26 @@
     }
   }
 
+  /** Licences sold on this person's packets: how many, and what the contributor share came to. */
+  function salesByPacket() {
+    const own = new Set(board.packets.map((p) => p.id));
+    const out = new Map();
+    for (const g of board.grants) {
+      if (!own.has(g.packetId)) continue;
+      const s = out.get(g.packetId) || { count: 0, earned: 0 };
+      s.count += 1;
+      s.earned += g.contributorCredits;
+      out.set(g.packetId, s);
+    }
+    return out;
+  }
+
   function renderCredits() {
     $("balance").textContent = String(board.balances[me] ?? 0);
+    const sales = [...salesByPacket().values()];
+    const earned = sales.reduce((n, s) => n + s.earned, 0);
+    const count = sales.reduce((n, s) => n + s.count, 0);
+    $("earned").textContent = count ? t("Sales of your packets: {count}. Earned: {n} credits.", { n: earned, count }) : t("None of your packets has sold yet.");
     fill($("ledger"), board.ledger.slice().reverse().slice(0, 50).map((e) => h("li", { class: "item" },
       h("div", { class: "meta" }, h("span", { class: e.delta > 0 ? "delta-plus" : "" }, `${e.delta > 0 ? "+" : ""}${e.delta}`), e.reason, when(e.at)),
     )), t("No credit movements yet."));

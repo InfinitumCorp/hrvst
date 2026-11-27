@@ -32,6 +32,8 @@ export interface MarketFilter {
   sort?: MarketSort;
 }
 
+/** Stands in for another person's Cumulus ID in what one person sees. */
+export const ANONYMOUS = "anonymous";
 /** Holds mission rewards between posting and acceptance. */
 export const ESCROW = "escrow";
 
@@ -509,15 +511,24 @@ export class HrvstBackend {
     };
   }
 
-  /** What one person may see: their own silo, credits and grants, plus open missions and their own missions. */
+  /**
+   * What one person may see: their own silo, credits and grants, plus open missions and their own
+   * missions. Other people stay anonymous: a contributor does not learn who bought their packet, and
+   * nobody learns who posted or claimed a mission that is not theirs.
+   */
   snapshotFor(cid: string): Board {
+    const hide = (who: string) => (who === cid ? who : ANONYMOUS);
     const packets = [...this.packets.values()].filter((p) => p.owner === cid);
     const mine = new Set(packets.map((p) => p.id));
     return {
       captures: [...this.captures.values()].filter((c) => c.owner === cid),
       packets,
-      missions: [...this.missions.values()].filter((m) => m.status === "open" || m.buyer === cid || m.claimer === cid),
-      grants: this.grants.filter((g) => g.licensee === cid || mine.has(g.packetId)),
+      missions: [...this.missions.values()]
+        .filter((m) => m.status === "open" || m.buyer === cid || m.claimer === cid)
+        .map((m) => ({ ...m, buyer: hide(m.buyer), ...(m.claimer ? { claimer: hide(m.claimer) } : {}) })),
+      grants: this.grants
+        .filter((g) => g.licensee === cid || mine.has(g.packetId))
+        .map((g) => ({ ...g, licensee: hide(g.licensee) })),
       ledger: this.ledger.filter((e) => e.account === cid),
       signals: this.signals.filter((s) => mine.has(s.packetId)),
       balances: { [cid]: this.balance(cid) },
