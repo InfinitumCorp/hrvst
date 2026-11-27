@@ -37,7 +37,7 @@ A kept or listed packet can emit a `fault` signal for :\ARCHITECT\. The signal i
 | POST | `/v1/account/plan/checkout` | person only: `{ planId, returnUrl, orgName? }` returns `{ status: "checkout", url }` for Stripe Checkout |
 | POST | `/v1/account/plan/portal` | person only: `{ returnUrl }` returns `{ url }` for the Stripe customer portal (Manage billing) |
 
-A person only acts on what they own: refine their own captures, keep, list, delete or signal their own packets, license for themselves, submit missions they claimed, and accept missions they posted. Anything else is `403`. For a person, `GET /v1/board` shows their own silo, credits, grants and signals, plus open missions and their own missions. A service with `HRVST_API_TOKEN` sees the whole board.
+A person only acts on what they own: refine their own captures, keep, list, delete or signal their own packets, license for themselves, submit missions they claimed, and accept missions they posted. Anything else is `403`. For a person, `GET /v1/board` shows their own silo, credits, grants and signals, plus open missions and their own missions. Other people stay anonymous in that view: a contributor sees what each sale earned but not who bought, and missions show `anonymous` in place of anyone else who posted or claimed them. A service with `HRVST_API_TOKEN` sees the whole board.
 
 ## Plans and billing
 

@@ -139,6 +139,9 @@
     "Open": "Открыть",
     "Nothing bought yet.": "Пока ничего не куплено.",
     "No credit movements yet.": "Движений по кредитам пока нет.",
+    "sold {count}×, earned {n}": "продано {count}×, заработано {n}",
+    "Earned {n} credits from {count} sales of your packets.": "Заработано {n} кредитов на {count} продажах ваших пакетов.",
+    "None of your packets has sold yet.": "Ни один из ваших пакетов ещё не продан.",
     "Proof of perspective": "Доказательство наблюдения",
     "Proof checked: it matches the observation and links into the chain.": "Доказательство проверено: оно совпадает с наблюдением и встроено в цепочку.",
     "Proof links into the chain. The contributor erased the original, so the text itself can no longer be rechecked.":
