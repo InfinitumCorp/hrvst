@@ -112,7 +112,14 @@
   }
 
   async function renderMarket() {
-    const listings = await api("/v1/market");
+    const f = new FormData($("market-filter"));
+    const params = new URLSearchParams();
+    for (const key of ["q", "maxPrice", "minQuality", "sort"]) {
+      const value = String(f.get(key) || "").trim();
+      if (value) params.set(key, value);
+    }
+    const query = params.toString();
+    const listings = await api(`/v1/market${query ? `?${query}` : ""}`);
     const mine = new Set(board.packets.map((p) => p.id));
     const held = new Set(board.grants.filter((g) => g.licensee === me).map((g) => g.packetId));
     fill($("market"), listings.map((l) => h("li", { class: "item" },
@@ -248,6 +255,11 @@
         });
         ev.target.reset();
       });
+    });
+
+    $("market-filter").addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      renderMarket().catch((e) => status(e.message, true));
     });
 
     $("export").addEventListener("click", () => act("Download", async () => {

@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { timingSafeEqual } from "node:crypto";
-import { getBackend, HrvstError, type PlaceClass } from "./domain.ts";
+import { getBackend, HrvstError, type MarketFilter, type MarketSort, type PlaceClass } from "./domain.ts";
 import { firmSuite } from "./firm.ts";
 import { conjureRoutesFromEnv, toWebRequest, sendWebResponse } from "./conjure/conjure.mjs";
 import { openClawRoutesFromEnv } from "./openclaw/openclaw.mjs";
@@ -107,6 +107,28 @@ function serviceOnly(who: Caller) {
 /** The CID a person acts as; undefined for a service, which may act for anyone. */
 function actorOf(who: Caller): string | undefined {
   return who.kind === "person" ? who.profile.cid : undefined;
+}
+
+/** ?q=&minQuality=&maxPrice=&use=&sort= — blank values are ignored; bad ones are a 400. */
+function marketFilter(params: URLSearchParams): MarketFilter {
+  const num = (name: string, min: number, max: number) => {
+    const raw = params.get(name);
+    if (raw === null || raw.trim() === "") return undefined;
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value < min || value > max) throw new HrvstError(`${name} must be between ${min} and ${max}`);
+    return value;
+  };
+  const sort = params.get("sort") || undefined;
+  if (sort && sort !== "newest" && sort !== "cheapest" && sort !== "quality") throw new HrvstError("sort must be newest, cheapest or quality");
+  const q = params.get("q") || undefined;
+  if (q && q.length > 120) throw new HrvstError("q is too long");
+  return {
+    q,
+    minQuality: num("minQuality", 0, 1),
+    maxPrice: num("maxPrice", 1, 1_000_000),
+    use: params.get("use") || undefined,
+    sort: sort as MarketSort | undefined,
+  };
 }
 
 function place(value: unknown): PlaceClass {
@@ -226,7 +248,7 @@ export function createHrvstServer(
       if (resource === "board" && req.method === "GET") return json(res, 200, actor ? store.snapshotFor(actor) : store.snapshot());
 
       // The market: listed packets without owner or observation. Licensees collect at /v1/grants/:id.
-      if (resource === "market" && req.method === "GET" && !id) return json(res, 200, store.market());
+      if (resource === "market" && req.method === "GET" && !id) return json(res, 200, store.market(marketFilter(url.searchParams)));
       if (resource === "grants" && id && !action && req.method === "GET") return json(res, 200, store.delivery(id, actor));
 
       // FIRM Suite: FIRM, FIRM Wallet, Firmament Network and $HRVST; with ?owner=, that CID's credits.

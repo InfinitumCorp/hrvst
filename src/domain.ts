@@ -19,6 +19,17 @@ import {
 export { CONTRIBUTOR_SHARE_BPS, PLATFORM_FEE_BPS };
 export type { ArchitectSignal, Board, Capture, Delivery, Grant, Listing, Mission, Packet, PlaceClass };
 
+export type MarketSort = "newest" | "cheapest" | "quality";
+
+/** Narrow the market: place text, minimum quality (0 to 1), maximum price, a permitted use; and an order. */
+export interface MarketFilter {
+  q?: string;
+  minQuality?: number;
+  maxPrice?: number;
+  use?: string;
+  sort?: MarketSort;
+}
+
 /** Holds mission rewards between posting and acceptance. */
 export const ESCROW = "escrow";
 
@@ -412,13 +423,24 @@ export class HrvstBackend {
   }
 
   /** Listed, unexpired packets as a buyer sees them before paying. */
-  market(): Listing[] {
+  market(filter: MarketFilter = {}): Listing[] {
     const now = Date.now();
-    return [...this.packets.values()]
+    const q = filter.q?.trim().toLowerCase();
+    const listings = [...this.packets.values()]
       .filter((p) => p.status === "listed" && new Date(p.expiresAt).getTime() >= now)
+      .filter((p) => !q || p.placeLabel.toLowerCase().includes(q))
+      .filter((p) => filter.minQuality === undefined || p.quality >= filter.minQuality)
+      .filter((p) => filter.maxPrice === undefined || p.priceCredits <= filter.maxPrice)
+      .filter((p) => !filter.use || p.permittedUses.includes(filter.use))
       .map(({ id, placeLabel, quality, permittedUses, priceCredits, createdAt, expiresAt }) => ({
         id, placeLabel, quality, permittedUses, priceCredits, createdAt, expiresAt,
       }));
+    const by: Record<MarketSort, (a: Listing, b: Listing) => number> = {
+      newest: (a, b) => b.createdAt.localeCompare(a.createdAt),
+      cheapest: (a, b) => a.priceCredits - b.priceCredits || b.createdAt.localeCompare(a.createdAt),
+      quality: (a, b) => b.quality - a.quality || a.priceCredits - b.priceCredits,
+    };
+    return listings.sort(by[filter.sort ?? "newest"]);
   }
 
   /** The licensee collects what they paid for. The contributor stays anonymous. */

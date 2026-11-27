@@ -56,6 +56,28 @@
     <section data-panel="market" class="panel" hidden>
       <h2>Market</h2>
       <p class="muted">Listed packets. You see the place, quality and price before you buy; the observation and its proof come after.</p>
+      <form id="market-filter" class="form">
+        <div class="row">
+          <label>Place <input name="q" maxlength="120" placeholder="library, aisle 6…"></label>
+          <label>At most (credits) <input name="maxPrice" type="number" min="1" max="1000000" step="1"></label>
+          <label>Quality at least
+            <select name="minQuality">
+              <option value="">any</option>
+              <option value="0.5">0.5</option>
+              <option value="0.7">0.7</option>
+              <option value="0.9">0.9</option>
+            </select>
+          </label>
+          <label>Order
+            <select name="sort">
+              <option value="newest">Newest</option>
+              <option value="cheapest">Cheapest</option>
+              <option value="quality">Best quality</option>
+            </select>
+          </label>
+        </div>
+        <button type="submit">Search</button>
+      </form>
       <ul id="market" class="list"></ul>
     </section>
 
