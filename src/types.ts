@@ -77,6 +77,17 @@ export interface Listing {
   expiresAt: string;
 }
 
+/** What a buyer sees of a mission submission before paying: like a market listing, no observation. */
+export interface SubmissionPreview {
+  missionId: string;
+  placeLabel: string;
+  quality: number;
+  permittedUses: string[];
+  createdAt: string;
+  /** Packets this buyer already turned down for the mission. */
+  rejectedBefore: number;
+}
+
 /** What a licensee receives: the observation and its proof, without the contributor's identity. */
 export interface Delivery {
   grant: Grant;

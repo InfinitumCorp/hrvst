@@ -16,6 +16,7 @@ import {
   type Packet,
   type PlaceClass,
   type ProofCheck,
+  type SubmissionPreview,
 } from "./types.ts";
 
 export { CONTRIBUTOR_SHARE_BPS, PLATFORM_FEE_BPS };
@@ -341,6 +342,25 @@ export class HrvstBackend {
     return mission;
   }
 
+  /**
+   * The submission as the buyer sees it before deciding: place, quality, uses and when it was made.
+   * The observation itself comes only with the licence that accepting creates.
+   */
+  submissionPreview(missionId: string, actor?: string): SubmissionPreview {
+    const mission = this.requireMission(missionId);
+    mustBe(actor, mission.buyer, "buyer");
+    if (mission.status !== "submitted" || !mission.packetId) throw new HrvstError("mission has no submission", 409);
+    const packet = this.requirePacket(mission.packetId);
+    return {
+      missionId: mission.id,
+      placeLabel: packet.placeLabel,
+      quality: packet.quality,
+      permittedUses: [...packet.permittedUses],
+      createdAt: packet.createdAt,
+      rejectedBefore: mission.rejectedPackets?.length ?? 0,
+    };
+  }
+
   acceptMission(missionId: string, actor?: string): Mission {
     const mission = this.requireMission(missionId);
     mustBe(actor, mission.buyer, "buyer");
@@ -511,6 +531,13 @@ export class HrvstBackend {
     };
   }
 
+  /** A mission as one person sees it: anyone else who posted or claimed it is `anonymous`. A service sees it all. */
+  missionFor(mission: Mission, cid?: string): Mission {
+    if (cid === undefined) return mission;
+    const hide = (who: string) => (who === cid ? who : ANONYMOUS);
+    return { ...mission, buyer: hide(mission.buyer), ...(mission.claimer ? { claimer: hide(mission.claimer) } : {}) };
+  }
+
   /**
    * What one person may see: their own silo, credits and grants, plus open missions and their own
    * missions. Other people stay anonymous: a contributor does not learn who bought their packet, and
@@ -525,7 +552,7 @@ export class HrvstBackend {
       packets,
       missions: [...this.missions.values()]
         .filter((m) => m.status === "open" || m.buyer === cid || m.claimer === cid)
-        .map((m) => ({ ...m, buyer: hide(m.buyer), ...(m.claimer ? { claimer: hide(m.claimer) } : {}) })),
+        .map((m) => this.missionFor(m, cid)),
       grants: this.grants
         .filter((g) => g.licensee === cid || mine.has(g.packetId))
         .map((g) => ({ ...g, licensee: hide(g.licensee) })),
