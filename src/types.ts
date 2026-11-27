@@ -144,7 +144,34 @@ export interface ArchitectSignal {
   architectScoreId?: string;
 }
 
+/** Something that happened to one person's packets or missions, for their activity feed. Names nobody else. */
+export type ActivityKind =
+  | "sold"
+  | "packet_expired"
+  | "mission_claimed"
+  | "mission_released"
+  | "mission_submitted"
+  | "mission_lapsed"
+  | "submission_accepted"
+  | "submission_rejected"
+  | "claim_cancelled";
+
+export interface Activity {
+  id: string;
+  /** Whose feed this is in. */
+  account: string;
+  kind: ActivityKind;
+  at: string;
+  /** The packet's place or the mission's title, so the line reads on its own. */
+  title: string;
+  packetId?: string;
+  missionId?: string;
+  /** Credits this person gained (a sale, an accepted submission) or got back (a lapsed mission). */
+  credits?: number;
+}
+
 export interface Board {
+  activity: Activity[];
   captures: Capture[];
   packets: Packet[];
   missions: Mission[];

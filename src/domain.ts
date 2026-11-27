@@ -4,6 +4,8 @@ import { dirname } from "node:path";
 import {
   CONTRIBUTOR_SHARE_BPS,
   PLATFORM_FEE_BPS,
+  type Activity,
+  type ActivityKind,
   type ArchitectSignal,
   type Board,
   type ChainReport,
@@ -35,6 +37,8 @@ export interface MarketFilter {
 
 /** Stands in for another person's Cumulus ID in what one person sees. */
 export const ANONYMOUS = "anonymous";
+/** How many activity lines the store keeps in all; a person's board shows their latest 50. */
+export const ACTIVITY_CAP = 20_000;
 /** Holds mission rewards between posting and acceptance. */
 export const ESCROW = "escrow";
 
@@ -124,11 +128,18 @@ export class HrvstBackend {
   grants: Grant[] = [];
   ledger: CreditEntry[] = [];
   signals: ArchitectSignal[] = [];
+  activity: Activity[] = [];
   balances = new Map<string, number>();
   private chainTip: string | null = null;
 
   constructor() {
     this.credit("platform", 0, "open");
+  }
+
+  /** Add a line to one person's activity feed. The oldest lines go once the feed store passes its cap. */
+  private notify(account: string, kind: ActivityKind, title: string, extra: Pick<Activity, "packetId" | "missionId" | "credits"> = {}) {
+    this.activity.push({ id: nid("act"), account, kind, at: iso(), title, ...extra });
+    if (this.activity.length > ACTIVITY_CAP) this.activity.splice(0, this.activity.length - ACTIVITY_CAP);
   }
 
   credit(account: string, delta: number, reason: string) {
@@ -284,6 +295,7 @@ export class HrvstBackend {
       this.credit(ESCROW, -mission.rewardCredits, `refund ${mission.id}`);
       this.credit(mission.buyer, mission.rewardCredits, `refund ${mission.id}`);
     }
+    if (mission.status === "claimed" && mission.claimer) this.notify(mission.claimer, "claim_cancelled", mission.title, { missionId: mission.id });
     mission.status = "cancelled";
     return mission;
   }
@@ -298,6 +310,7 @@ export class HrvstBackend {
     mission.status = "claimed";
     mission.claimer = owner;
     mission.claimedAt = iso();
+    this.notify(mission.buyer, "mission_claimed", mission.title, { missionId: mission.id });
     return mission;
   }
 
@@ -306,6 +319,7 @@ export class HrvstBackend {
     const mission = this.requireMission(missionId);
     mustBe(actor, mission.claimer, "claimer");
     if (mission.status !== "claimed") throw new HrvstError("only a claimed mission can be released", 409);
+    this.notify(mission.buyer, "mission_released", mission.title, { missionId: mission.id });
     return this.reopen(mission);
   }
 
@@ -315,6 +329,7 @@ export class HrvstBackend {
     mustBe(actor, mission.buyer, "buyer");
     if (mission.status !== "submitted" || !mission.packetId) throw new HrvstError("mission has no submission", 409);
     mission.rejectedPackets = [...(mission.rejectedPackets ?? []), mission.packetId];
+    if (mission.claimer) this.notify(mission.claimer, "submission_rejected", mission.title, { missionId: mission.id, packetId: mission.packetId });
     return this.reopen(mission);
   }
 
@@ -339,6 +354,7 @@ export class HrvstBackend {
     }
     mission.status = "submitted";
     mission.packetId = packet.id;
+    this.notify(mission.buyer, "mission_submitted", mission.title, { missionId: mission.id });
     return mission;
   }
 
@@ -383,6 +399,7 @@ export class HrvstBackend {
       issuedAt: iso(),
     });
     mission.status = "accepted";
+    this.notify(mission.claimer, "submission_accepted", mission.title, { missionId: mission.id, packetId: mission.packetId, credits: contributor });
     return mission;
   }
 
@@ -416,6 +433,7 @@ export class HrvstBackend {
       issuedAt: iso(),
     };
     this.grants.push(grant);
+    this.notify(packet.owner, "sold", packet.placeLabel, { packetId: packet.id, credits: contributor });
     return grant;
   }
 
@@ -429,6 +447,7 @@ export class HrvstBackend {
     let missionsLapsed = 0;
     for (const packet of this.packets.values()) {
       if (packet.status !== "retired" && new Date(packet.expiresAt).getTime() < now) {
+        if (packet.status === "listed" || packet.status === "private") this.notify(packet.owner, "packet_expired", packet.placeLabel, { packetId: packet.id });
         packet.status = "retired";
         packetsRetired++;
       }
@@ -440,6 +459,8 @@ export class HrvstBackend {
         this.credit(ESCROW, -mission.rewardCredits, `lapsed ${mission.id}`);
         this.credit(mission.buyer, mission.rewardCredits, `lapsed ${mission.id}`);
       }
+      this.notify(mission.buyer, "mission_lapsed", mission.title, { missionId: mission.id, ...(mission.escrowed ? { credits: mission.rewardCredits } : {}) });
+      if (mission.status === "claimed" && mission.claimer) this.notify(mission.claimer, "mission_lapsed", mission.title, { missionId: mission.id });
       mission.status = "cancelled";
       missionsLapsed++;
     }
@@ -521,6 +542,7 @@ export class HrvstBackend {
 
   snapshot(): Board {
     return {
+      activity: [...this.activity],
       captures: [...this.captures.values()],
       packets: [...this.packets.values()],
       missions: [...this.missions.values()],
@@ -548,6 +570,7 @@ export class HrvstBackend {
     const packets = [...this.packets.values()].filter((p) => p.owner === cid);
     const mine = new Set(packets.map((p) => p.id));
     return {
+      activity: this.activity.filter((a) => a.account === cid).slice(-50).reverse(),
       captures: [...this.captures.values()].filter((c) => c.owner === cid),
       packets,
       missions: [...this.missions.values()]
@@ -616,6 +639,7 @@ export class HrvstBackend {
         missionsReleased++;
       }
     }
+    this.activity = this.activity.filter((a) => a.account !== cid);
     return { captures, packets, missionsCancelled, missionsReleased };
   }
 
@@ -667,6 +691,7 @@ export class HrvstBackend {
     store.grants = state.grants;
     store.ledger = state.ledger;
     store.signals = state.signals;
+    store.activity = state.activity ?? [];
     store.chainTip = state.chainTip;
     return store;
   }
@@ -701,7 +726,8 @@ export class HrvstBackend {
   }
 }
 
-export type StoredState = Board & { version: 1; chainTip: string | null };
+/** Files written before the activity feed have no `activity`; they load with an empty one. */
+export type StoredState = Omit<Board, "activity"> & { activity?: Activity[]; version: 1; chainTip: string | null };
 
 let backend: HrvstBackend | null = null;
 
