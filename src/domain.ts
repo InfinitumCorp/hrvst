@@ -6,6 +6,7 @@ import {
   PLATFORM_FEE_BPS,
   type ArchitectSignal,
   type Board,
+  type ChainReport,
   type Capture,
   type CreditEntry,
   type Delivery,
@@ -14,6 +15,7 @@ import {
   type Mission,
   type Packet,
   type PlaceClass,
+  type ProofCheck,
 } from "./types.ts";
 
 export { CONTRIBUTOR_SHARE_BPS, PLATFORM_FEE_BPS };
@@ -449,7 +451,9 @@ export class HrvstBackend {
     if (!grant) throw new HrvstError("grant not found", 404);
     mustBe(actor, grant.licensee, "licensee");
     const { owner: _o, captureId: _c, status: _s, priceCredits: _p, ...packet } = this.requirePacket(grant.packetId);
-    return { grant, packet };
+    const { report, sealed } = this.walkChain();
+    const check: ProofCheck = !report.ok ? "broken" : sealed.has(packet.id) ? "verified" : "linked";
+    return { grant, packet, check };
   }
 
   /** Observe → Understand → Act. A kept or listed fault becomes an Architect score, still unapproved. */
@@ -577,6 +581,39 @@ export class HrvstBackend {
     return { captures, packets, missionsCancelled, missionsReleased };
   }
 
+  /**
+   * Walk the proof chain in the order packets were made. Every packet must point at the proof before
+   * it (the first at none), the last must be the stored tip, and where the capture still holds its text
+   * the proof is recomputed from it and the packet's observation must match it.
+   */
+  verifyChain(): ChainReport {
+    return this.walkChain().report;
+  }
+
+  private walkChain(): { report: ChainReport; sealed: Set<string> } {
+    const sealed = new Set<string>();
+    let previous: string | null = null;
+    let packets = 0;
+    const result = (extra: Partial<ChainReport> = {}) => ({
+      report: { ok: !extra.reason, packets, sealed: sealed.size, tip: this.chainTip, ...extra },
+      sealed,
+    });
+    for (const packet of this.packets.values()) {
+      packets++;
+      if (packet.previousProof !== previous) return result({ brokenAt: packet.id, reason: "does not link to the packet before it" });
+      const capture = this.captures.get(packet.captureId);
+      if (capture && capture.status === "refined" && capture.note) {
+        const expected = sha256(`${previous ?? "genesis"}|${capture.owner}|${capture.capturedAt}|${capture.rawDigest}|${capture.note}`);
+        if (expected !== packet.proof) return result({ brokenAt: packet.id, reason: "proof does not match its capture" });
+        if (packet.observation && packet.observation !== capture.note) return result({ brokenAt: packet.id, reason: "observation differs from its capture" });
+        sealed.add(packet.id);
+      }
+      previous = packet.proof;
+    }
+    if (previous !== this.chainTip) return result({ reason: "the stored tip is not the last proof" });
+    return result();
+  }
+
   /** Everything needed to rebuild the store, including the proof-chain tip. */
   toJSON(): StoredState {
     return { version: 1, ...this.snapshot(), chainTip: this.chainTip };
@@ -638,6 +675,8 @@ export function openBackend(file?: string, seedDemo = !file): HrvstBackend {
   if (file && existsSync(file)) {
     const store = HrvstBackend.fromJSON(JSON.parse(readFileSync(file, "utf8")) as StoredState);
     store.file = file;
+    const chain = store.verifyChain();
+    if (!chain.ok) console.warn(`HRVST proof chain does not hold (${chain.reason}${chain.brokenAt ? ` at ${chain.brokenAt}` : ""}); the data file may have been edited`);
     return store;
   }
   const store = new HrvstBackend();

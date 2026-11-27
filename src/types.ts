@@ -81,6 +81,26 @@ export interface Listing {
 export interface Delivery {
   grant: Grant;
   packet: Omit<Packet, "owner" | "captureId" | "status" | "priceCredits">;
+  /**
+   * verified: the chain holds and this proof was recomputed from its capture.
+   * linked: the chain holds, but the capture was erased, so only the link can be checked.
+   * broken: the chain does not hold.
+   */
+  check: ProofCheck;
+}
+
+export type ProofCheck = "verified" | "linked" | "broken";
+
+/** The result of walking the proof chain from the first packet to the tip. */
+export interface ChainReport {
+  ok: boolean;
+  /** Packets walked. */
+  packets: number;
+  /** Packets whose proof was recomputed from a capture that still holds its text. */
+  sealed: number;
+  tip: string | null;
+  brokenAt?: string;
+  reason?: string;
 }
 
 export interface Grant {
