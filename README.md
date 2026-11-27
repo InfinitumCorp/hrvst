@@ -51,6 +51,10 @@ The plans are [HRVST] Free, Pro Contributor (`hrvst_pro`, self-serve) and Buyer 
 
 The page loads only its own files (`src/app/`) under `script-src 'self'; style-src 'self'; connect-src 'self'`, builds every element with `textContent`, and keeps the token in the tab's `sessionStorage`. No analytics: HRVST is excluded from Amplitude.
 
+## Expiry
+
+A mission may carry `deadlineDays` (1 to 90). Once a minute the server sweeps: an open or claimed mission past its deadline is cancelled and the reward goes back to the buyer; a submitted one waits for the buyer to accept or reject. Claiming or submitting after the deadline is refused even before the sweep runs. A packet past its expiry (180 days after packaging) is retired: its owner keeps the text, but it leaves the market and cannot be used for a mission.
+
 ## Your data
 
 - **Delete a packet** (`decide` with `delete`): the capture's note and the packet's observation are wiped; proof hashes stay so the chain still verifies. If someone already bought a licence, their copy stays with them.
