@@ -19,7 +19,7 @@ A kept or listed packet can emit a `fault` signal for :\ARCHITECT\. The signal i
 | POST | `/v1/captures` | `{ owner, note, placeLabel, placeClass }` |
 | POST | `/v1/captures/:id/refine` | filter, or exclude a restricted place unless `{ "optedIn": true }` |
 | POST | `/v1/packets/:id/decide` | `{ action: keep|list|delete, priceCredits? }` |
-| GET | `/v1/market` | listed packets: place, quality, uses, price; no owner, no observation |
+| GET | `/v1/market` | listed packets: place, quality, uses, price; no owner, no observation. Filters: `q` (place text), `minQuality` (0 to 1), `maxPrice`, `use`; `sort` = `newest`, `cheapest` or `quality` |
 | POST | `/v1/packets/:id/license` | `{ licensee }` |
 | GET | `/v1/grants/:id` | the licensee collects the observation and its proof; the contributor stays anonymous |
 | POST | `/v1/packets/:id/signal` | queue an Architect fault |
