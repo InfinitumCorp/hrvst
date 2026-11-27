@@ -14,6 +14,9 @@
     ["military", "Military site (restricted)"],
     ["home_interior", "Home interior (restricted)"],
   ];
+  const I18N = window.HRVST_I18N || { lang: "en", t: (s, v) => (v ? s.replace(/\{(\w+)\}/g, (m, k) => (k in v ? String(v[k]) : m)) : s) };
+  const t = I18N.t;
+  const placeName = (cls) => t((PLACES.find(([v]) => v === cls) || [cls, cls])[1]);
   const RESTRICTED = new Set(["private_residence", "school", "hospital", "military", "home_interior"]);
   const $ = (id) => document.getElementById(id);
 
@@ -31,7 +34,7 @@
   }
 
   const chip = (text) => h("span", { class: "chip" }, text);
-  const when = (iso) => new Date(iso).toLocaleString();
+  const when = (iso) => new Date(iso).toLocaleString(I18N.lang === "ru" ? "ru-RU" : undefined);
   const fill = (list, items, empty) => list.replaceChildren(...(items.length ? items : [h("li", { class: "empty" }, empty)]));
 
   function status(text, isError) {
@@ -42,7 +45,7 @@
 
   async function api(path, body) {
     const token = window.CumulusID && window.CumulusID.token();
-    if (!token) throw new Error("Please sign in again.");
+    if (!token) throw new Error(t("Please sign in again."));
     const res = await fetch(path, {
       method: body === undefined ? "GET" : "POST",
       headers: { authorization: `Bearer ${token}`, ...(body === undefined ? {} : { "content-type": "application/json" }) },
@@ -51,9 +54,9 @@
     const data = await res.json().catch(() => ({}));
     if (res.status === 401) {
       window.CumulusID.signOut();
-      throw new Error("Your sign-in ended. Please sign in again.");
+      throw new Error(t("Your sign-in ended. Please sign in again."));
     }
-    if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+    if (!res.ok) throw new Error(data.error || t("Request failed ({status})", { status: res.status }));
     return data;
   }
 
@@ -62,7 +65,7 @@
     status(`${label}…`);
     try {
       const note = await fn();
-      status(typeof note === "string" ? note : `${label}: done.`);
+      status(typeof note === "string" ? note : t("{label}: done.", { label }));
     } catch (e) {
       status(`${label}: ${e.message}`, true);
       return;
@@ -80,35 +83,35 @@
       const canRefine = c.status === "captured" || c.status === "excluded";
       return h("li", { class: "item" },
         h("p", {}, c.note),
-        h("div", { class: "meta" }, chip(c.status), chip(c.placeLabel), chip(c.placeClass), c.redactions.length ? chip(`removed: ${c.redactions.join(", ")}`) : null, when(c.capturedAt)),
+        h("div", { class: "meta" }, chip(t(c.status)), chip(c.placeLabel), chip(placeName(c.placeClass)), c.redactions.length ? chip(t("removed: {list}", { list: c.redactions.join(", ") })) : null, when(c.capturedAt)),
         c.excludedReason ? h("p", { class: "muted" }, c.excludedReason) : null,
         canRefine ? h("div", { class: "actions" },
-          restricted ? h("label", {}, h("span", {}, "Opt in: share this restricted place"), optIn) : null,
-          h("button", { type: "button", onclick: () => act("Refine", () => api(`/v1/captures/${c.id}/refine`, { optedIn: restricted && optIn.checked })) }, "Refine into a packet"),
+          restricted ? h("label", {}, h("span", {}, t("Opt in: share this restricted place")), optIn) : null,
+          h("button", { type: "button", onclick: () => act(t("Refine"), () => api(`/v1/captures/${c.id}/refine`, { optedIn: restricted && optIn.checked })) }, t("Refine into a packet")),
         ) : null,
       );
-    }), "No captures yet.");
+    }), t("No captures yet."));
 
     fill($("packets"), board.packets.slice().reverse().map((p) => {
-      const price = h("input", { type: "number", min: 1, max: 1000000, step: 1, value: p.priceCredits, "aria-label": "Price in credits" });
+      const price = h("input", { type: "number", min: 1, max: 1000000, step: 1, value: p.priceCredits, "aria-label": t("Price in credits") });
       const live = p.status !== "retired";
       return h("li", { class: "item" },
         h("p", {}, p.observation),
-        h("div", { class: "meta" }, chip(p.status), chip(p.placeLabel), chip(`quality ${p.quality}`), chip(`${p.priceCredits} credits`), chip(p.permittedUses.join(", "))),
+        h("div", { class: "meta" }, chip(t(p.status)), chip(p.placeLabel), chip(t("quality {q}", { q: p.quality })), chip(t("{n} credits", { n: p.priceCredits })), chip(p.permittedUses.join(", "))),
         live ? h("div", { class: "actions" },
-          p.status !== "private" ? h("button", { type: "button", onclick: () => act("Keep", () => api(`/v1/packets/${p.id}/decide`, { action: "keep" })) }, "Keep private") : null,
+          p.status !== "private" ? h("button", { type: "button", onclick: () => act(t("Keep"), () => api(`/v1/packets/${p.id}/decide`, { action: "keep" })) }, t("Keep private")) : null,
           price,
-          h("button", { type: "button", onclick: () => act("List", () => api(`/v1/packets/${p.id}/decide`, { action: "list", priceCredits: Number(price.value) })) }, p.status === "listed" ? "Update price" : "List for sale"),
+          h("button", { type: "button", onclick: () => act(t("List"), () => api(`/v1/packets/${p.id}/decide`, { action: "list", priceCredits: Number(price.value) })) }, p.status === "listed" ? t("Update price") : t("List for sale")),
           p.status === "private" || p.status === "listed"
-            ? h("button", { type: "button", onclick: () => act("Report to Architect", () => api(`/v1/packets/${p.id}/signal`, {})) }, "Report as a fault")
+            ? h("button", { type: "button", onclick: () => act(t("Report to Architect"), () => api(`/v1/packets/${p.id}/signal`, {})) }, t("Report as a fault"))
             : null,
           h("button", {
             type: "button",
-            onclick: () => confirm("Delete this packet? It leaves the market and cannot be listed again.") && act("Delete", () => api(`/v1/packets/${p.id}/decide`, { action: "delete" })),
-          }, "Delete"),
+            onclick: () => confirm(t("Delete this packet? It leaves the market and cannot be listed again.")) && act(t("Delete"), () => api(`/v1/packets/${p.id}/decide`, { action: "delete" })),
+          }, t("Delete")),
         ) : null,
       );
-    }), "No packets yet. Refine a capture to make one.");
+    }), t("No packets yet. Refine a capture to make one."));
   }
 
   async function renderMarket() {
@@ -124,16 +127,16 @@
     const held = new Set(board.grants.filter((g) => g.licensee === me).map((g) => g.packetId));
     fill($("market"), listings.map((l) => h("li", { class: "item" },
       h("p", {}, `${l.placeLabel}`),
-      h("div", { class: "meta" }, chip(`quality ${l.quality}`), chip(l.permittedUses.join(", ")), chip(`${l.priceCredits} credits`), `expires ${when(l.expiresAt)}`),
+      h("div", { class: "meta" }, chip(t("quality {q}", { q: l.quality })), chip(l.permittedUses.join(", ")), chip(t("{n} credits", { n: l.priceCredits })), t("expires {when}", { when: when(l.expiresAt) })),
       h("div", { class: "actions" },
-        mine.has(l.id) ? h("span", { class: "muted" }, "Yours") :
-        held.has(l.id) ? h("span", { class: "muted" }, "Bought") :
+        mine.has(l.id) ? h("span", { class: "muted" }, t("Yours")) :
+        held.has(l.id) ? h("span", { class: "muted" }, t("Bought")) :
         h("button", {
           type: "button",
-          onclick: () => confirm(`Buy a licence for ${l.priceCredits} credits?`) && act("Buy", () => api(`/v1/packets/${l.id}/license`, {})),
-        }, `Buy for ${l.priceCredits} credits`),
+          onclick: () => confirm(t("Buy a licence for {n} credits?", { n: l.priceCredits })) && act(t("Buy"), () => api(`/v1/packets/${l.id}/license`, {})),
+        }, t("Buy for {n} credits", { n: l.priceCredits })),
       ),
-    )), "Nothing listed right now.");
+    )), t("Nothing listed right now."));
   }
 
   function renderMissions() {
@@ -143,43 +146,43 @@
       const mineAsClaimer = m.claimer === me;
       const actions = [];
       if (m.status === "open" && !mineAsBuyer) {
-        actions.push(h("button", { type: "button", onclick: () => act("Claim", () => api(`/v1/missions/${m.id}/claim`, {})) }, "Claim"));
+        actions.push(h("button", { type: "button", onclick: () => act(t("Claim"), () => api(`/v1/missions/${m.id}/claim`, {})) }, t("Claim")));
       }
       if (m.status === "claimed" && mineAsClaimer) {
-        const pick = h("select", { "aria-label": "Packet to submit" }, usable.map((p) => h("option", { value: p.id }, `${p.placeLabel}: ${p.observation.slice(0, 40)}`)));
+        const pick = h("select", { "aria-label": t("Packet to submit") }, usable.map((p) => h("option", { value: p.id }, `${p.placeLabel}: ${p.observation.slice(0, 40)}`)));
         actions.push(
-          usable.length ? pick : h("span", { class: "muted" }, "Keep or list a packet first."),
-          h("button", { type: "button", disabled: !usable.length, onclick: () => act("Submit", () => api(`/v1/missions/${m.id}/submit`, { packetId: pick.value })) }, "Submit"),
-          h("button", { type: "button", onclick: () => act("Release", () => api(`/v1/missions/${m.id}/release`, {})) }, "Give back"),
+          usable.length ? pick : h("span", { class: "muted" }, t("Keep or list a packet first.")),
+          h("button", { type: "button", disabled: !usable.length, onclick: () => act(t("Submit"), () => api(`/v1/missions/${m.id}/submit`, { packetId: pick.value })) }, t("Submit")),
+          h("button", { type: "button", onclick: () => act(t("Release"), () => api(`/v1/missions/${m.id}/release`, {})) }, t("Give back")),
         );
       }
       if (mineAsBuyer && m.status === "submitted") {
         actions.push(
-          h("button", { type: "button", onclick: () => confirm(`Accept and pay ${m.rewardCredits} credits?`) && act("Accept", () => api(`/v1/missions/${m.id}/accept`, {})) }, "Accept and pay"),
-          h("button", { type: "button", onclick: () => act("Reject", () => api(`/v1/missions/${m.id}/reject`, {})) }, "Reject"),
+          h("button", { type: "button", onclick: () => confirm(t("Accept and pay {n} credits?", { n: m.rewardCredits })) && act(t("Accept"), () => api(`/v1/missions/${m.id}/accept`, {})) }, t("Accept and pay")),
+          h("button", { type: "button", onclick: () => act(t("Reject"), () => api(`/v1/missions/${m.id}/reject`, {})) }, t("Reject")),
         );
       }
       if (mineAsBuyer && (m.status === "open" || m.status === "claimed")) {
         actions.push(h("button", {
           type: "button",
-          onclick: () => confirm("Cancel this mission and get the reward back?") && act("Cancel", () => api(`/v1/missions/${m.id}/cancel`, {})),
-        }, "Cancel"));
+          onclick: () => confirm(t("Cancel this mission and get the reward back?")) && act(t("Cancel"), () => api(`/v1/missions/${m.id}/cancel`, {})),
+        }, t("Cancel")));
       }
       return h("li", { class: "item" },
         h("p", {}, m.title),
         m.brief ? h("p", { class: "muted" }, m.brief) : null,
-        h("div", { class: "meta" }, chip(m.status), chip(m.placeClass), chip(`${m.rewardCredits} credits`), m.deadline ? chip(`due ${when(m.deadline)}`) : null, mineAsBuyer ? chip("you posted") : null, mineAsClaimer ? chip("you claimed") : null),
+        h("div", { class: "meta" }, chip(t(m.status)), chip(placeName(m.placeClass)), chip(t("{n} credits", { n: m.rewardCredits })), m.deadline ? chip(t("due {when}", { when: when(m.deadline) })) : null, mineAsBuyer ? chip(t("you posted")) : null, mineAsClaimer ? chip(t("you claimed")) : null),
         actions.length ? h("div", { class: "actions" }, actions) : null,
       );
-    }), "No missions right now.");
+    }), t("No missions right now."));
   }
 
   function renderPurchases() {
     const mine = board.grants.filter((g) => g.licensee === me).reverse();
     fill($("purchases"), mine.map((g) => h("li", { class: "item" },
-      h("div", { class: "meta" }, chip(`${g.priceCredits} credits`), chip(g.terms), when(g.issuedAt)),
-      h("div", { class: "actions" }, h("button", { type: "button", onclick: () => openDelivery(g.id) }, "Open")),
-    )), "Nothing bought yet.");
+      h("div", { class: "meta" }, chip(t("{n} credits", { n: g.priceCredits })), chip(g.terms), when(g.issuedAt)),
+      h("div", { class: "actions" }, h("button", { type: "button", onclick: () => openDelivery(g.id) }, t("Open"))),
+    )), t("Nothing bought yet."));
   }
 
   async function openDelivery(grantId) {
@@ -189,8 +192,8 @@
       box.replaceChildren(
         h("h3", {}, packet.placeLabel),
         h("p", {}, packet.observation),
-        h("div", { class: "meta" }, chip(`quality ${packet.quality}`), chip(grant.terms), `captured ${when(packet.createdAt)}`),
-        h("p", { class: "muted" }, "Proof of perspective"),
+        h("div", { class: "meta" }, chip(t("quality {q}", { q: packet.quality })), chip(grant.terms), t("captured {when}", { when: when(packet.createdAt) })),
+        h("p", { class: "muted" }, t("Proof of perspective")),
         h("code", {}, packet.proof),
       );
       box.hidden = false;
@@ -203,7 +206,7 @@
     $("balance").textContent = String(board.balances[me] ?? 0);
     fill($("ledger"), board.ledger.slice().reverse().slice(0, 50).map((e) => h("li", { class: "item" },
       h("div", { class: "meta" }, h("span", { class: e.delta > 0 ? "delta-plus" : "" }, `${e.delta > 0 ? "+" : ""}${e.delta}`), e.reason, when(e.at)),
-    )), "No credit movements yet.");
+    )), t("No credit movements yet."));
   }
 
   async function load() {
@@ -228,14 +231,14 @@
   }
 
   function setup() {
-    $("capture-place").replaceChildren(...PLACES.map(([v, t]) => h("option", { value: v }, t)));
-    $("mission-place").replaceChildren(...PLACES.filter(([v]) => !RESTRICTED.has(v)).map(([v, t]) => h("option", { value: v }, t)));
+    $("capture-place").replaceChildren(...PLACES.map(([v, label]) => h("option", { value: v }, t(label))));
+    $("mission-place").replaceChildren(...PLACES.filter(([v]) => !RESTRICTED.has(v)).map(([v, label]) => h("option", { value: v }, t(label))));
     for (const b of document.querySelectorAll("[data-tab]")) b.addEventListener("click", () => showTab(b.dataset.tab));
 
     $("capture-form").addEventListener("submit", (ev) => {
       ev.preventDefault();
       const f = new FormData(ev.target);
-      act("Capture", async () => {
+      act(t("Capture"), async () => {
         await api("/v1/captures", { note: f.get("note"), placeLabel: f.get("placeLabel"), placeClass: f.get("placeClass"), mediaKind: "note" });
         ev.target.reset();
       });
@@ -244,7 +247,7 @@
     $("mission-form").addEventListener("submit", (ev) => {
       ev.preventDefault();
       const f = new FormData(ev.target);
-      act("Post mission", async () => {
+      act(t("Post mission"), async () => {
         const days = f.get("deadlineDays");
         await api("/v1/missions", {
           title: f.get("title"),
@@ -262,7 +265,7 @@
       renderMarket().catch((e) => status(e.message, true));
     });
 
-    $("export").addEventListener("click", () => act("Download", async () => {
+    $("export").addEventListener("click", () => act(t("Download"), async () => {
       const data = await api("/v1/me/export");
       const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
       const link = h("a", { href: url, download: "hrvst-export.json" });
@@ -273,11 +276,11 @@
     }));
 
     $("erase").addEventListener("click", () => {
-      const typed = prompt('This cannot be undone. Type "erase" to erase your HRVST data.');
+      const typed = prompt(t('This cannot be undone. Type "erase" to erase your HRVST data.'));
       if (typed !== "erase") return;
-      act("Erase", async () => {
+      act(t("Erase"), async () => {
         const done = await api("/v1/me/erase", { confirm: "erase" });
-        return `Erased ${done.captures} captures and ${done.packets} packets; ${done.missionsCancelled} missions cancelled, ${done.missionsReleased} given back.`;
+        return t("Erased {captures} captures and {packets} packets; {cancelled} missions cancelled, {released} given back.", { captures: done.captures, packets: done.packets, cancelled: done.missionsCancelled, released: done.missionsReleased });
       });
     });
 

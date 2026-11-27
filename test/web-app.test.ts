@@ -19,7 +19,7 @@ test("the web app is served with a strict CSP and the configured Cumulus ID clie
     assert.doesNotMatch(html, /\{\{/, "every placeholder is filled");
     assert.doesNotMatch(html, /<script(?![^>]*\ssrc=)/, "no inline scripts");
 
-    for (const [path, type] of [["/app/app.js", "text/javascript"], ["/app/cumulus-id.js", "text/javascript"], ["/app/style.css", "text/css"]]) {
+    for (const [path, type] of [["/app/app.js", "text/javascript"], ["/app/i18n.js", "text/javascript"], ["/app/cumulus-id.js", "text/javascript"], ["/app/style.css", "text/css"]]) {
       const res = await fetch(`${base}${path}`);
       assert.equal(res.status, 200, path);
       assert.match(res.headers.get("content-type") ?? "", new RegExp(type));

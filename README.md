@@ -46,6 +46,8 @@ The plans are [HRVST] Free, Pro Contributor (`hrvst_pro`, self-serve) and Buyer 
 
 `GET /` serves the HRVST web app: Silo (capture, refine, keep, list, delete, report a fault), Market, Missions (post, claim, submit, give back, accept, reject, cancel), Purchases (open what you bought, with its proof) and Credits. People sign in with **Cumulus ID**; signed out, the page offers "Sign in with Cumulus ID" and "Create a Cumulus ID" (the same flow with `prompt=create`, so a new account comes straight back signed in). There is no HRVST password or PIN.
 
+The app is in Russian and English. It follows the browser's languages (Russian if any of them is Russian) and has a switch in the header that remembers the choice on that device. Translations live in `src/app/i18n.js`, keyed by the English text; `test/i18n.test.ts` fails if any string the app shows has no Russian version. Messages from the server stay in English.
+
 - `HRVST_CID_CLIENT` (default `hrvst`): HRVST's client id at the issuer. **HRVST must be registered as a client** (with its production origin) in the issuer's client list before sign-in works.
 - `CID_ISSUER` (default `https://id.cumuluscloud.app`): used by both the page and the server's token check. Point it at a mirror that loads in Russia for a Russian deployment.
 

@@ -101,7 +101,7 @@
         who.className = "cid-who";
         who.textContent = (s.profile && (s.profile.email || s.profile.username)) || "Signed in";
         who.title = `Signed in with Cumulus://ID as ${who.textContent}`;
-        wrap.append(who, button("Sign out", signOut));
+        wrap.append(who, button(host.dataset.signOutLabel || "Sign out", signOut));
       } else {
         wrap.append(
           button(host.dataset.label || "Sign in with Cumulus ID", () => signIn()),
